@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reyting — Malaka Admin</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0b0e18;color:#cdd3e0;min-height:100vh}
+
+.top{background:#0a0e18;border-bottom:1px solid rgba(255,255,255,.05);padding:14px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.top-left{display:flex;align-items:center;gap:14px}
+.brand{display:flex;align-items:center;gap:10px;color:#fff;font-weight:700;font-size:1rem;text-decoration:none}
+.brand-ic{width:32px;height:32px;background:linear-gradient(135deg,#6c63f6,#8b5cf6);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff}
+.back-link{color:#7c8aa8;text-decoration:none;font-size:.85rem;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;transition:.15s}
+.back-link:hover{background:rgba(255,255,255,.05);color:#fff}
+
+.wrap{max-width:1200px;margin:0 auto;padding:28px}
+.page-title{font-size:1.7rem;font-weight:800;color:#fff;margin:0 0 4px;display:flex;align-items:center;gap:12px}
+.page-sub{color:#7c8aa8;font-size:.9rem;margin:0 0 20px}
+
+.tools{display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;align-items:center}
+.tabs{display:flex;background:#141824;border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:4px;gap:2px}
+.tab{padding:8px 18px;background:transparent;border:none;color:#7c8aa8;font-weight:600;font-size:.83rem;border-radius:7px;cursor:pointer;transition:.15s;font-family:inherit}
+.tab.active{background:linear-gradient(135deg,#6c63f6,#8b5cf6);color:#fff}
+.tab:hover:not(.active){color:#cdd3e0}
+
+.search{background:#141824;border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:9px 14px;display:flex;align-items:center;gap:8px;min-width:260px;flex:1;max-width:360px}
+.search input{background:transparent;border:none;color:#fff;font-size:.85rem;flex:1;outline:none;font-family:inherit}
+.search input::placeholder{color:#4c5776}
+.search svg{color:#7c8aa8;flex-shrink:0}
+
+.card{background:#141824;border:1px solid rgba(255,255,255,.05);border-radius:14px;overflow:hidden}
+.card-head{padding:16px 22px;border-bottom:1px solid rgba(255,255,255,.05);display:flex;align-items:center;justify-content:space-between}
+.card-head h3{margin:0;color:#fff;font-size:1rem;font-weight:700;display:flex;align-items:center;gap:10px}
+.card-head .dot{width:6px;height:6px;background:#6c63f6;border-radius:50%}
+.card-head .count{font-size:.78rem;color:#7c8aa8;font-weight:600}
+
+table{width:100%;border-collapse:collapse}
+thead th{
+    font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;
+    color:#6d7a94;font-weight:600;
+    padding:14px 22px;border-bottom:1px solid rgba(255,255,255,.05);
+    text-align:left;background:#131828
+}
+thead th:last-child, tbody td:last-child{text-align:right}
+tbody td{padding:14px 22px;font-size:.87rem;color:#b8c1d3;border-bottom:1px solid rgba(255,255,255,.03);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:rgba(255,255,255,.02)}
+
+.rank{width:44px;height:34px;background:#1a1f2e;color:#7c8aa8;font-weight:800;font-size:.85rem;display:inline-flex;align-items:center;justify-content:center;border-radius:8px}
+.rank-1{background:linear-gradient(135deg,#f5c542,#e8a319);color:#3a2500}
+.rank-2{background:linear-gradient(135deg,#d0d3db,#a3a7b3);color:#2a2e38}
+.rank-3{background:linear-gradient(135deg,#cd7f32,#9c5e21);color:#fff}
+.name{color:#fff;font-weight:600}
+.uname{font-size:.75rem;color:#7c8296;margin-left:8px}
+.points{color:#4ade80;font-weight:800;font-size:.98rem;font-variant-numeric:tabular-nums}
+.tabular{font-variant-numeric:tabular-nums}
+
+.empty{padding:80px 20px;text-align:center;color:#4c5776}
+.empty-ic{width:80px;height:80px;background:#1a1f2e;border-radius:20px;margin:0 auto 16px;display:grid;place-items:center;color:#4c5776;font-size:2rem}
+.empty-t{color:#fff;font-size:1.05rem;font-weight:700;margin-bottom:6px}
+.empty-d{color:#7c8296;font-size:.85rem}
+
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:#0f1420}
+::-webkit-scrollbar-thumb{background:#2a3247;border-radius:5px}
+</style>
+</head>
+<body>
+
+<div class="top">
+    <div class="top-left">
+        <a href="/admin/" class="brand"><span class="brand-ic"><i class="fa fa-bolt"></i></span>Malaka</a>
+        <a href="/admin/" class="back-link"><i class="fa fa-arrow-left"></i> Dashboardga qaytish</a>
+    </div>
+</div>
+
+<div class="wrap">
+    <h1 class="page-title"><i class="fa fa-trophy" style="color:#f5c542"></i>Reyting</h1>
+    <p class="page-sub">Foydalanuvchilarning faolligini kunlik/haftalik/oylik kesimda kuzating (faqat ko'rish).</p>
+
+    <div class="tools">
+        <div class="tabs" id="tabs">
+            <button class="tab active" data-p="day">Bugun</button>
+            <button class="tab" data-p="week">Hafta</button>
+            <button class="tab" data-p="month">Oy</button>
+            <button class="tab" data-p="all">Butun davr</button>
+        </div>
+        <div class="search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input id="q" placeholder="Foydalanuvchi bo'yicha qidirish…" oninput="renderTable()">
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <h3><span class="dot"></span>Reyting jadvali</h3>
+            <div class="count" id="count">—</div>
+        </div>
+        <div id="body">
+            <div class="empty">Yuklanmoqda…</div>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ngrok interstitial bypass */
+(function(){const f=window.fetch.bind(window);window.fetch=(u,o={})=>{o.headers=Object.assign({},o.headers,{'ngrok-skip-browser-warning':'true'});return f(u,o)};})();
+
+let rows = [];
+let currentPeriod = 'day';
+
+async function loadBoard(period){
+    currentPeriod = period;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.p === period));
+    document.getElementById('body').innerHTML = '<div class="empty">Yuklanmoqda…</div>';
+    const r = await fetch(`/api/v1/webapp/leaderboard?period=${period}&limit=500`);
+    rows = await r.json();
+    renderTable();
+}
+
+function fmtTime(s){const m=Math.floor(s/60),r=s%60;return `${m}:${String(r).padStart(2,'0')}`}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+function renderTable(){
+    const q = document.getElementById('q').value.trim().toLowerCase();
+    const filtered = q
+        ? rows.filter(r => (r.name||'').toLowerCase().includes(q) || (r.username||'').toLowerCase().includes(q))
+        : rows;
+
+    document.getElementById('count').textContent = filtered.length + ' ta foydalanuvchi';
+
+    if (!filtered.length) {
+        const labels = {day:"bugun",week:"shu hafta",month:"shu oy",all:"hozircha"};
+        document.getElementById('body').innerHTML = `
+            <div class="empty">
+                <div class="empty-ic">🏆</div>
+                <div class="empty-t">${q ? 'Foydalanuvchi topilmadi' : `Reyting ${labels[currentPeriod]} bo'sh`}</div>
+                <div class="empty-d">${q ? 'Boshqa nom bilan qidiring' : "Foydalanuvchilar test yechganda paydo bo'ladi"}</div>
+            </div>`;
+        return;
+    }
+
+    document.getElementById('body').innerHTML = `
+        <div style="overflow-x:auto">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:70px">O'rin</th>
+                    <th>Foydalanuvchi</th>
+                    <th class="tabular">Testlar</th>
+                    <th class="tabular">Vaqt</th>
+                    <th class="tabular">Ball</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${filtered.map(r => `
+                    <tr>
+                        <td><span class="rank ${r.rank<=3?'rank-'+r.rank:''}">${r.rank<=3?['🥇','🥈','🥉'][r.rank-1]:'#'+r.rank}</span></td>
+                        <td>
+                            <span class="name">${esc(r.name)}</span>
+                            ${r.username?`<span class="uname">@${esc(r.username)}</span>`:''}
+                        </td>
+                        <td class="tabular">${r.attempts}</td>
+                        <td class="tabular">${fmtTime(r.time_taken_seconds)}</td>
+                        <td class="points">${r.points}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+        </div>
+    `;
+}
+
+document.getElementById('tabs').addEventListener('click', e => {
+    const btn = e.target.closest('.tab');
+    if (btn && btn.dataset.p !== currentPeriod) loadBoard(btn.dataset.p);
+});
+
+loadBoard('day');
+</script>
+</body>
+</html>

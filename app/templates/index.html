@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Malaka</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#EEF3EA;min-height:100vh;padding-bottom:48px}
+a{text-decoration:none;color:inherit}
+.header{background:#fff;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(0,0,0,.04)}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-icon{width:36px;height:36px;background:#3DB66A;border-radius:9px;display:flex;align-items:center;justify-content:center}
+.logo-icon svg{width:20px;height:20px;fill:#fff}
+.logo-text{font-size:19px;font-weight:700;color:#111}
+.btn-login{background:#111;color:#fff;border:none;padding:9px 18px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer}
+.content{padding:24px 20px 0}
+.badge{display:inline-flex;align-items:center;gap:6px;background:#fff;border-radius:20px;padding:5px 12px;font-size:12px;color:#333;margin-bottom:20px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.badge-dot{width:7px;height:7px;background:#3DB66A;border-radius:50%;flex-shrink:0}
+.hero-title{font-size:30px;font-weight:800;line-height:1.22;color:#111;margin-bottom:14px}
+.hero-title .green{color:#3DB66A}
+.hero-sub{font-size:14px;line-height:1.65;color:#666;margin-bottom:28px}
+.btn-primary{width:100%;background:#3DB66A;color:#fff;border:none;padding:17px;border-radius:15px;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:11px;display:block;text-align:center}
+.btn-primary:active{opacity:.88}
+.btn-secondary{width:100%;background:#fff;color:#111;border:none;padding:17px;border-radius:15px;font-size:15px;font-weight:600;cursor:pointer;display:block;text-align:center;margin-bottom:28px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:22px}
+.stat-card{border-radius:16px;padding:15px 8px;text-align:center}
+.stat-green{background:#E4F3EB}
+.stat-blue{background:#E3EBF8}
+.stat-amber{background:#F8F1E3}
+.stat-val{font-size:22px;font-weight:800;line-height:1.2;margin-bottom:4px}
+.stat-green .stat-val{color:#2E9A57}
+.stat-blue .stat-val{color:#3A6DB5}
+.stat-amber .stat-val{color:#B5812E}
+.stat-lbl{font-size:11px;color:#777;line-height:1.3}
+.steps-title{font-size:16px;font-weight:700;color:#111;margin-bottom:12px}
+.step{background:#fff;border-radius:16px;padding:15px;display:flex;align-items:flex-start;gap:13px;margin-bottom:9px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.step-num{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0}
+.n1{background:#3DB66A}
+.n2{background:#3A6DB5}
+.n3{background:#B5812E}
+.step-t{font-size:14px;font-weight:600;color:#111;margin-bottom:3px}
+.step-d{font-size:12px;color:#999}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><rect x="3" y="14" width="4" height="7" rx="1"/><rect x="10" y="9" width="4" height="12" rx="1"/><rect x="17" y="4" width="4" height="17" rx="1"/></svg>
+    </div>
+    <span class="logo-text">Malaka</span>
+  </div>
+  <a href="/webapp/modules" class="btn-login">Kirish</a>
+</header>
+
+<div class="content">
+  <div class="badge"><span class="badge-dot"></span>Shaxsiy tayyorgarlik rejasi</div>
+
+  <h1 class="hero-title">Har kuni oz-ozdan,<br><span class="green">reja</span> bo'yicha o'sing</h1>
+
+  <p class="hero-sub">Malaka sizga mos kunlik reja tuzadi: mavzular, mashqlar va tahlil — bosqichma-bosqich.</p>
+
+  <a href="/webapp/modules" class="btn-primary">Rejamni tuzish</a>
+  <button class="btn-secondary" onclick="document.querySelector('.steps-title').scrollIntoView({behavior:'smooth'})">Qanday ishlaydi?</button>
+
+  <div class="stats">
+    <div class="stat-card stat-green">
+      <div class="stat-val" id="topics-count">—</div>
+      <div class="stat-lbl">mavzu bloki</div>
+    </div>
+    <div class="stat-card stat-blue">
+      <div class="stat-val" id="questions-count">—</div>
+      <div class="stat-lbl">savol</div>
+    </div>
+    <div class="stat-card stat-amber">
+      <div class="stat-val">10 daq</div>
+      <div class="stat-lbl">kunlik</div>
+    </div>
+  </div>
+
+  <p class="steps-title">Qanday ishlaydi?</p>
+
+  <div class="step">
+    <div class="step-num n1">1</div>
+    <div>
+      <div class="step-t">Rejangizni tuzing</div>
+      <div class="step-d">Yo'nalish, daraja va kunlik maqsad.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num n2">2</div>
+    <div>
+      <div class="step-t">Har kuni mashq</div>
+      <div class="step-d">Mavzular va tezkor mashqlar bilan.</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num n3">3</div>
+    <div>
+      <div class="step-t">Natijani kuzating</div>
+      <div class="step-d">Progress, ball va reyting bir joyda.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){const f=window.fetch.bind(window);window.fetch=(u,o={})=>{o.headers=Object.assign({},o.headers,{'ngrok-skip-browser-warning':'true'});return f(u,o)};})();
+if(window.Telegram?.WebApp){Telegram.WebApp.ready();Telegram.WebApp.expand();}
+fetch('/api/v1/webapp/stats').then(r=>r.json()).then(d=>{
+  if(d.topics_count!=null)document.getElementById('topics-count').textContent=d.topics_count;
+  if(d.questions_count!=null)document.getElementById('questions-count').textContent=d.questions_count+'+';
+}).catch(()=>{});
+</script>
+</body>
+</html>

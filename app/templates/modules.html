@@ -1,0 +1,110 @@
+{% extends "_base.html" %}
+{% set nav_active = 'home' %}
+{% block title %}Modullar — Malaka{% endblock %}
+
+{% block head %}
+<style>
+.hero{background:linear-gradient(135deg,var(--green) 0%,#2E9A57 100%);border-radius:20px;padding:20px 22px;color:#fff;margin-bottom:20px;box-shadow:0 8px 24px rgba(61,182,106,.25)}
+.hero-hi{font-size:.8rem;opacity:.85;margin-bottom:6px}
+.hero-name{font-size:1.35rem;font-weight:800;margin-bottom:2px}
+.hero-sub{font-size:.85rem;opacity:.9;margin-bottom:14px}
+.hero-stats{display:flex;gap:16px}
+.hero-stat{flex:1;background:rgba(255,255,255,.15);border-radius:12px;padding:10px 12px;backdrop-filter:blur(6px)}
+.hero-stat .v{font-size:1.15rem;font-weight:800}
+.hero-stat .l{font-size:.7rem;opacity:.85}
+
+.mod-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mod{background:#fff;border-radius:16px;padding:16px;box-shadow:var(--shadow);transition:.15s;position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;min-height:140px}
+.mod:active{transform:scale(.98)}
+.mod-ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;margin-bottom:14px}
+.mod-t{font-size:.95rem;font-weight:700;line-height:1.25;margin-bottom:3px;color:#111}
+.mod-s{font-size:.72rem;color:var(--muted)}
+</style>
+{% endblock %}
+
+{% block header %}
+<header class="hdr">
+  <div class="hdr-logo">
+    <div class="hdr-logo-ic"><svg viewBox="0 0 24 24"><rect x="3" y="14" width="4" height="7" rx="1"/><rect x="10" y="9" width="4" height="12" rx="1"/><rect x="17" y="4" width="4" height="17" rx="1"/></svg></div>
+    <div class="hdr-logo-tx">Malaka</div>
+  </div>
+  <div class="hdr-right">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="hero">
+  <div class="hero-hi">Assalomu alaykum,</div>
+  <div class="hero-name" id="hi-name">…</div>
+  <div class="hero-sub">Bilim olishga tayyormisiz?</div>
+  <div class="hero-stats">
+    <div class="hero-stat"><div class="v" id="hi-points">0</div><div class="l">Ballaringiz</div></div>
+    <div class="hero-stat"><div class="v" id="hi-attempts">0</div><div class="l">Yechilgan test</div></div>
+  </div>
+</div>
+
+<div class="section-t big">Modullar</div>
+<div id="mods" class="mod-grid"></div>
+<div id="empty" class="empty" style="display:none">
+  <div class="empty-ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
+  <div class="empty-t">Hozircha modullar yo'q</div>
+  <div class="empty-d">Admin panelidan yangi modullar qo'shiladi</div>
+</div>
+{% endblock %}
+
+{% block script %}
+<script>
+const COLORS = [
+  {bg:'rgba(61,182,106,.12)', fg:'#3DB66A'},
+  {bg:'rgba(58,109,181,.12)', fg:'#3A6DB5'},
+  {bg:'rgba(139,92,246,.12)', fg:'#8B5CF6'},
+  {bg:'rgba(233,78,119,.12)', fg:'#E94E77'},
+  {bg:'rgba(181,129,46,.12)', fg:'#B5812E'},
+  {bg:'rgba(14,165,233,.12)', fg:'#0EA5E9'},
+];
+const ICONS = ['🧮','📚','🌍','🔬','🎨','⚛️','🧬','📖'];
+
+(async function(){
+    const user = await MK.ensureAuth();
+    document.getElementById('hi-name').textContent = user?.first_name || 'do\'stim';
+
+    // Load progress
+    fetch('/api/v1/webapp/me/progress', { headers: MK.authHeaders() })
+        .then(r => r.ok ? r.json() : null)
+        .then(p => {
+            if (!p) return;
+            document.getElementById('hi-points').textContent = p.total_points || 0;
+            document.getElementById('hi-attempts').textContent = p.total_attempts || 0;
+        }).catch(()=>{});
+
+    // Load modules
+    const r = await fetch('/api/v1/webapp/modules');
+    const mods = await r.json();
+
+    if (!mods.length) {
+        document.getElementById('empty').style.display = '';
+        return;
+    }
+
+    document.getElementById('mods').innerHTML = mods.map((m, i) => {
+        const c = COLORS[i % COLORS.length];
+        const icon = m.icon || ICONS[i % ICONS.length];
+        const iconInner = m.icon?.startsWith('fa ')
+            ? `<i class="${m.icon}"></i>`
+            : icon;
+        return `
+        <a href="/webapp/modules/${m.id}" class="mod">
+            <div>
+                <div class="mod-ic" style="background:${c.bg};color:${c.fg}">${iconInner}</div>
+                <div class="mod-t">${esc(m.title)}</div>
+                <div class="mod-s">${m.topic_count} ta mavzu</div>
+            </div>
+        </a>`;
+    }).join('');
+})();
+
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+</script>
+{% endblock %}
