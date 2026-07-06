@@ -9,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.config import MEDIA_ROOT
+from core.config import ALLOWED_BOOK_EXT, MAX_BOOK_SIZE, MEDIA_ROOT
 from db.session import get_db
 from models.book import Book
 from models.module import Module
@@ -21,8 +21,6 @@ router = APIRouter(prefix="/admin-tools", tags=["admin-tools"])
 templates = Jinja2Templates(directory="templates")
 
 BOOKS_DIR = MEDIA_ROOT / "books"
-ALLOWED_BOOK_EXT = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx", ".epub", ".djvu", ".txt"}
-MAX_BOOK_SIZE = 100 * 1024 * 1024  # 100 MB
 
 
 @router.get("/leaderboard", response_class=HTMLResponse)

@@ -4,7 +4,7 @@ from starlette_admin import BooleanField, IntegerField, StringField, TextAreaFie
 
 class ModuleAdminView(BaseAdminView):
     name = "Modul"
-    name_plural = "Modullar"
+    label = "Modullar"
     icon = "fa fa-layer-group"
 
     fields = [

@@ -5,7 +5,7 @@ from starlette.requests import Request
 
 class TelegramUserAdminView(BaseAdminView):
     name = "Foydalanuvchi"
-    name_plural = "Foydalanuvchilar"
+    label = "Foydalanuvchilar"
     icon = "fa fa-users"
 
     fields = [

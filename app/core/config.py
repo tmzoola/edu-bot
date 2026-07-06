@@ -6,6 +6,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # Resolves to <repo>/app/media; in Docker a volume is mounted here.
 MEDIA_ROOT = Path(__file__).resolve().parent.parent / "media"
 
+# Book upload constraints (shared by the admin tool page and the admin panel).
+BOOKS_DIR_NAME = "books"
+ALLOWED_BOOK_EXT = {
+    ".pdf", ".doc", ".docx", ".ppt", ".pptx",
+    ".xls", ".xlsx", ".epub", ".djvu", ".txt",
+}
+MAX_BOOK_SIZE = 100 * 1024 * 1024  # 100 MB
+
 
 class Settings(BaseSettings):
     APP_MODE: str = "DEV"

@@ -4,7 +4,7 @@ from starlette_admin import BooleanField, HasOne, IntegerField, StringField, Tex
 
 class QuizAdminView(BaseAdminView):
     name = "Test"
-    name_plural = "Testlar"
+    label = "Testlar"
     icon = "fa fa-list-check"
 
     fields = [

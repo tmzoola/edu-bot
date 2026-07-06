@@ -5,7 +5,7 @@ from starlette_admin import EnumField, HasOne, IntegerField, StringField, TextAr
 
 class QuestionAdminView(BaseAdminView):
     name = "Savol"
-    name_plural = "Savollar"
+    label = "Savollar"
     icon = "fa fa-question-circle"
 
     fields = [

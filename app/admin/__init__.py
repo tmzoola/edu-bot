@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from admin.auth import AdminAuth
+from admin.i18n_uz import install_uzbek
 from admin.views.book import BookAdminView
 from admin.views.module import ModuleAdminView
 from admin.views.question import QuestionAdminView
@@ -16,18 +17,26 @@ from models.quiz import Quiz
 from models.telegram_user import TelegramUser
 from models.topic import Topic
 from starlette_admin.contrib.sqla import Admin
+from starlette_admin.i18n import I18nConfig
 from starlette_admin.views import Link
 
 _TEMPLATES_DIR = str(Path(__file__).parent / "templates")
 
 
 def setup_admin(app: FastAPI) -> None:
+    # Register the Uzbek locale before building the admin so its Jinja env and
+    # DataTables config pick it up.
+    install_uzbek()
+
     admin = Admin(
         engine,
-        title="Malaka — Admin",
+        title="Muslima Darmonova",
         auth_provider=AdminAuth(),
         base_url="/admin/",
         templates_dir=_TEMPLATES_DIR,
+        # Force Uzbek; ignore the browser's Accept-Language so it doesn't flip
+        # to en/ru. A language cookie (from the switcher) can still override.
+        i18n_config=I18nConfig(default_locale="uz", language_header_name=None),
     )
 
     admin.add_view(Link(

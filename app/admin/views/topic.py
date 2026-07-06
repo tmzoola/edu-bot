@@ -4,7 +4,7 @@ from starlette_admin import BooleanField, HasOne, IntegerField, StringField, Tex
 
 class TopicAdminView(BaseAdminView):
     name = "Mavzu"
-    name_plural = "Mavzular"
+    label = "Mavzular"
     icon = "fa fa-book"
 
     fields = [
