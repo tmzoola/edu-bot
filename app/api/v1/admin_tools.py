@@ -1,13 +1,17 @@
 import re
+import uuid
+from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import MEDIA_ROOT
 from db.session import get_db
+from models.book import Book
 from models.module import Module
 from models.question import CorrectOption, Question
 from models.quiz import Quiz
@@ -15,6 +19,10 @@ from models.topic import Topic
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-tools"])
 templates = Jinja2Templates(directory="templates")
+
+BOOKS_DIR = MEDIA_ROOT / "books"
+ALLOWED_BOOK_EXT = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx", ".epub", ".djvu", ".txt"}
+MAX_BOOK_SIZE = 100 * 1024 * 1024  # 100 MB
 
 
 @router.get("/leaderboard", response_class=HTMLResponse)
@@ -140,6 +148,103 @@ async def builder_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
         "quiz_id": quiz_id,
         "questions_saved": saved,
     }
+
+
+# ═══ Books upload tool ═════════════════════════════════════════════
+
+@router.get("/books", response_class=HTMLResponse)
+async def books_page(request: Request, db: AsyncSession = Depends(get_db)):
+    topics = (await db.execute(select(Topic).order_by(Topic.order, Topic.id))).scalars().all()
+    books = (await db.execute(select(Book).order_by(Book.createdAt.desc()))).scalars().all()
+    categories = sorted({b.category for b in books if b.category})
+    return templates.TemplateResponse(
+        "admin_books.html",
+        {
+            "request": request,
+            "topics": [{"id": t.id, "title": t.title} for t in topics],
+            "categories": categories,
+            "books": [
+                {
+                    "id": b.id,
+                    "title": b.title,
+                    "author": b.author,
+                    "category": b.category,
+                    "topic_id": b.topic_id,
+                    "file_name": b.file_name,
+                    "file_size": b.file_size,
+                    "downloads": b.downloads,
+                    "is_active": b.is_active,
+                }
+                for b in books
+            ],
+        },
+    )
+
+
+@router.post("/books/upload")
+async def books_upload(
+    db: AsyncSession = Depends(get_db),
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    author: str = Form(""),
+    category: str = Form(""),
+    description: str = Form(""),
+    topic_id: str = Form(""),
+):
+    title = title.strip()
+    if not title:
+        raise HTTPException(400, "Sarlavha kiritilmagan")
+
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_BOOK_EXT:
+        raise HTTPException(400, f"Fayl turi qo'llab-quvvatlanmaydi: {ext or 'nomaʼlum'}")
+
+    data = await file.read()
+    if len(data) > MAX_BOOK_SIZE:
+        raise HTTPException(400, "Fayl juda katta (maks. 100 MB)")
+    if not data:
+        raise HTTPException(400, "Fayl bo'sh")
+
+    tid: int | None = None
+    if topic_id.strip():
+        tid = int(topic_id)
+        if not await db.get(Topic, tid):
+            raise HTTPException(400, "Mavzu topilmadi")
+
+    BOOKS_DIR.mkdir(parents=True, exist_ok=True)
+    stored = f"books/{uuid.uuid4().hex}{ext}"
+    (MEDIA_ROOT / stored).write_bytes(data)
+
+    book = Book(
+        title=title,
+        author=author.strip() or None,
+        category=category.strip() or None,
+        description=description.strip() or None,
+        topic_id=tid,
+        file_path=stored,
+        file_name=file.filename or f"kitob{ext}",
+        file_size=len(data),
+        is_active=True,
+        downloads=0,
+        order=0,
+    )
+    db.add(book)
+    await db.commit()
+    return {"ok": True, "id": book.id}
+
+
+@router.post("/books/{book_id}/delete")
+async def books_delete(book_id: int, db: AsyncSession = Depends(get_db)):
+    book = await db.get(Book, book_id)
+    if not book:
+        raise HTTPException(404, "Kitob topilmadi")
+    try:
+        (MEDIA_ROOT / book.file_path).unlink(missing_ok=True)
+    except OSError:
+        pass
+    await db.delete(book)
+    await db.commit()
+    return {"ok": True}
 
 
 @router.post("/builder/parse")

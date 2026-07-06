@@ -2,6 +2,10 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Absolute media root (uploads) — independent of the process working dir.
+# Resolves to <repo>/app/media; in Docker a volume is mounted here.
+MEDIA_ROOT = Path(__file__).resolve().parent.parent / "media"
+
 
 class Settings(BaseSettings):
     APP_MODE: str = "DEV"

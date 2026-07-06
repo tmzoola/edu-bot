@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from admin.auth import AdminAuth
+from admin.views.book import BookAdminView
 from admin.views.module import ModuleAdminView
 from admin.views.question import QuestionAdminView
 from admin.views.quiz import QuizAdminView
@@ -8,6 +9,7 @@ from admin.views.telegram_user import TelegramUserAdminView
 from admin.views.topic import TopicAdminView
 from db.session import engine
 from fastapi import FastAPI
+from models.book import Book
 from models.module import Module
 from models.question import Question
 from models.quiz import Quiz
@@ -34,6 +36,11 @@ def setup_admin(app: FastAPI) -> None:
         url="/admin-tools/builder",
     ))
     admin.add_view(Link(
+        label="Kitob yuklash",
+        icon="fa fa-file-arrow-up",
+        url="/admin-tools/books",
+    ))
+    admin.add_view(Link(
         label="Reyting",
         icon="fa fa-trophy",
         url="/admin-tools/leaderboard",
@@ -42,6 +49,7 @@ def setup_admin(app: FastAPI) -> None:
     admin.add_view(TopicAdminView(Topic, identity="mavzu"))
     admin.add_view(QuizAdminView(Quiz, identity="test"))
     admin.add_view(QuestionAdminView(Question, identity="savol"))
+    admin.add_view(BookAdminView(Book, identity="kitob"))
     admin.add_view(TelegramUserAdminView(TelegramUser, identity="foydalanuvchi"))
 
     admin.mount_to(app)

@@ -21,9 +21,9 @@ body{padding-bottom:0}
 
 .q-content{padding:24px 20px 100px}
 .q-num{font-size:.75rem;color:var(--muted);font-weight:600;margin-bottom:8px;letter-spacing:.02em}
-.q-text{font-size:1.15rem;font-weight:700;line-height:1.4;color:#111;margin-bottom:24px}
+.q-text{font-size:1.15rem;font-weight:700;line-height:1.4;color:#111;margin-bottom:24px;animation:fadeUp .25s ease}
 
-.opts{display:flex;flex-direction:column;gap:10px}
+.opts{display:flex;flex-direction:column;gap:10px;animation:fadeUp .28s ease}
 .opt{background:#fff;border:2px solid transparent;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:.15s;box-shadow:var(--shadow)}
 .opt:active{transform:scale(.99)}
 .opt.sel{border-color:var(--green);background:#F0FAF3}
@@ -117,8 +117,10 @@ function render(){
 
     c.querySelectorAll('.opt').forEach(el => {
         el.onclick = () => {
+            MK.haptic('light');
             answers[q.id] = el.dataset.l;
-            render();
+            // toggle in place — re-render would replay the fade animation
+            c.querySelectorAll('.opt').forEach(o => o.classList.toggle('sel', o === el));
             updateProgress();
         };
     });

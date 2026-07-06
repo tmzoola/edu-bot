@@ -30,6 +30,9 @@ services:
     environment:
       # Override .env's localhost so the app reaches the db container
       POSTGRES_HOST: db
+    volumes:
+      # Uploaded files (books etc.) must survive image rebuilds
+      - media_data:/project/app/media
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
       interval: 30s
@@ -39,3 +42,4 @@ services:
 
 volumes:
   postgres_data:
+  media_data:

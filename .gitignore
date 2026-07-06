@@ -190,3 +190,7 @@ statics/
 CLAUDE.md
 .env
 images
+test-pdf
+
+# Uploaded media (books etc.)
+app/media/

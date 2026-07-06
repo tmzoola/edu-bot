@@ -2,16 +2,21 @@ import hashlib
 import hmac
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+import random
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import parse_qsl
 
-from core.config import settings
+from pathlib import Path as FsPath
+
+from core.config import MEDIA_ROOT, settings
 from db.session import get_db
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from models.attempt import QuizAttempt
+from models.base import TASHKENT_TZ
+from models.book import Book
 from models.module import Module
 from models.question import Question
 from models.quiz import Quiz
@@ -71,6 +76,29 @@ async def leaderboard_page(request: Request):
 @pages.get("/me", response_class=HTMLResponse)
 async def me_page(request: Request):
     return templates.TemplateResponse("profile.html", {"request": request})
+
+
+@pages.get("/daily", response_class=HTMLResponse)
+async def daily_page(request: Request):
+    return templates.TemplateResponse("daily.html", {"request": request})
+
+
+@pages.get("/books", response_class=HTMLResponse)
+async def books_page(request: Request):
+    return templates.TemplateResponse("books.html", {"request": request})
+
+
+@pages.get("/books/{book_id}/file")
+async def book_file(book_id: int, db: AsyncSession = Depends(get_db)):
+    book = await db.get(Book, book_id)
+    if not book or not book.is_active:
+        raise HTTPException(404, "Kitob topilmadi")
+    path = MEDIA_ROOT / book.file_path
+    if not path.is_file():
+        raise HTTPException(404, "Fayl topilmadi")
+    book.downloads += 1
+    await db.commit()
+    return FileResponse(path, filename=book.file_name)
 
 
 # ═══ Telegram initData validation ════════════════════════════════════
@@ -581,6 +609,282 @@ async def my_progress(
             }
             for a in attempts
         ],
+    }
+
+
+# ═══ Books ═══════════════════════════════════════════════════════════
+
+@api.get("/books")
+async def list_books(db: AsyncSession = Depends(get_db)):
+    rows = (
+        await db.execute(
+            select(Book)
+            .where(Book.is_active == True)  # noqa: E712
+            .options(selectinload(Book.topic))
+            .order_by(Book.order, Book.createdAt.desc())
+        )
+    ).scalars().all()
+
+    return [
+        {
+            "id": b.id,
+            "title": b.title,
+            "author": b.author,
+            "description": b.description,
+            "category": b.category,
+            "topic": b.topic.title if b.topic else None,
+            "file_name": b.file_name,
+            "file_size": b.file_size,
+            "ext": FsPath(b.file_name).suffix.lstrip(".").upper(),
+            "downloads": b.downloads,
+            "url": f"/webapp/books/{b.id}/file",
+        }
+        for b in rows
+    ]
+
+
+# ═══ Daily quiz ══════════════════════════════════════════════════════
+#
+# A single "daily challenge": each day one topic is picked (rotating by date)
+# and 10 questions are drawn from it. The set is deterministic — seeded by the
+# date — so every user gets the same questions that day and reloads are stable.
+# Attempts are stored as regular QuizAttempt rows against a hidden "Kunlik test"
+# quiz, so they count toward points/leaderboard and let us compute streaks
+# without a schema migration. Only the FIRST attempt of the day is official
+# (awards points + extends the streak); later ones are practice.
+
+DAILY_QUIZ_TITLE = "🗓 Kunlik test"
+DAILY_TIME_LIMIT = 600
+DAILY_QUESTION_COUNT = 10
+
+
+def _today_tashkent() -> date:
+    return datetime.now(TASHKENT_TZ).date()
+
+
+def _attempt_date(a: QuizAttempt) -> date | None:
+    ts = a.createdAt
+    if ts is None:
+        return None
+    try:
+        return ts.astimezone(TASHKENT_TZ).date()
+    except Exception:  # noqa: BLE001 — naive datetimes
+        return ts.date()
+
+
+async def _daily_selection(db: AsyncSession, day: date | None = None):
+    """Deterministic (topic, [Question]) for `day`. Same for every user."""
+    day = day or _today_tashkent()
+    topics = (
+        await db.execute(
+            select(Topic)
+            .join(Quiz, Quiz.topic_id == Topic.id)
+            .join(Question, Question.quiz_id == Quiz.id)
+            .where(Topic.is_active == True, Quiz.is_active == True)  # noqa: E712
+            .group_by(Topic.id)
+            .order_by(Topic.order, Topic.id)
+        )
+    ).scalars().unique().all()
+    if not topics:
+        return None, []
+
+    ordinal = day.toordinal()
+    topic = topics[ordinal % len(topics)]
+
+    pool = (
+        await db.execute(
+            select(Question)
+            .join(Quiz, Quiz.id == Question.quiz_id)
+            .where(Quiz.topic_id == topic.id, Quiz.is_active == True)  # noqa: E712
+            .order_by(Question.id)
+        )
+    ).scalars().all()
+    if not pool:
+        return topic, []
+
+    rng = random.Random(ordinal)  # date-seeded → stable & identical for all users
+    chosen = rng.sample(pool, min(DAILY_QUESTION_COUNT, len(pool)))
+    return topic, chosen
+
+
+async def _get_or_create_daily_quiz(db: AsyncSession) -> Quiz | None:
+    """Hidden quiz row that daily attempts are recorded against."""
+    quiz = (
+        await db.execute(select(Quiz).where(Quiz.title == DAILY_QUIZ_TITLE))
+    ).scalars().first()
+    if quiz:
+        return quiz
+    topic = (
+        await db.execute(select(Topic).order_by(Topic.id).limit(1))
+    ).scalar_one_or_none()
+    if not topic:
+        return None
+    quiz = Quiz(
+        topic_id=topic.id,
+        title=DAILY_QUIZ_TITLE,
+        description="Har kuni bitta mavzudan 10 ta tasodifiy savol",
+        time_limit_seconds=DAILY_TIME_LIMIT,
+        is_active=False,  # hidden from normal topic/quiz listings
+    )
+    db.add(quiz)
+    await db.flush()
+    return quiz
+
+
+async def _daily_stats(db: AsyncSession, user_id: int, daily_quiz_id: int):
+    """(current_streak, today_done, today_official_attempt)."""
+    attempts = (
+        await db.execute(
+            select(QuizAttempt)
+            .where(
+                QuizAttempt.user_id == user_id,
+                QuizAttempt.quiz_id == daily_quiz_id,
+            )
+            .order_by(QuizAttempt.createdAt.asc())
+        )
+    ).scalars().all()
+
+    today = _today_tashkent()
+    dates: set[date] = set()
+    today_official: QuizAttempt | None = None
+    for a in attempts:
+        d = _attempt_date(a)
+        if d is None:
+            continue
+        dates.add(d)
+        if d == today and today_official is None:
+            today_official = a  # earliest attempt today = the official one
+
+    today_done = today in dates
+    anchor = today if today_done else today - timedelta(days=1)
+    streak = 0
+    d = anchor
+    while d in dates:
+        streak += 1
+        d -= timedelta(days=1)
+    return streak, today_done, today_official
+
+
+@api.get("/daily")
+async def get_daily(
+    db: AsyncSession = Depends(get_db),
+    x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
+    x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+):
+    topic, questions = await _daily_selection(db)
+    if not topic or not questions:
+        return {"available": False}
+
+    resp: dict[str, Any] = {
+        "available": True,
+        "date": _today_tashkent().isoformat(),
+        "topic_title": topic.title,
+        "total": len(questions),
+        "time_limit_seconds": DAILY_TIME_LIMIT,
+        "questions": [
+            {
+                "id": q.id,
+                "text": q.text,
+                "option_a": q.option_a,
+                "option_b": q.option_b,
+                "option_c": q.option_c,
+                "option_d": q.option_d,
+            }
+            for q in questions
+        ],
+        "today_done": False,
+        "streak": 0,
+        "today_result": None,
+    }
+
+    user = await _resolve_user(db, x_init_data, x_tg_id)
+    if user:
+        daily_quiz = await _get_or_create_daily_quiz(db)
+        if daily_quiz:
+            await db.commit()
+            streak, today_done, official = await _daily_stats(db, user.id, daily_quiz.id)
+            resp["streak"] = streak
+            resp["today_done"] = today_done
+            if official is not None:
+                resp["today_result"] = {
+                    "score": official.score,
+                    "total": official.total,
+                    "points": official.points,
+                    "percentage": official.percentage,
+                }
+    return resp
+
+
+@api.post("/daily/submit")
+async def submit_daily(
+    payload: dict[str, Any],
+    db: AsyncSession = Depends(get_db),
+    x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
+    x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+):
+    user = await _resolve_user(db, x_init_data, x_tg_id)
+    if not user:
+        raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
+
+    topic, questions = await _daily_selection(db)
+    daily_quiz = await _get_or_create_daily_quiz(db)
+    if not topic or not questions or not daily_quiz:
+        raise HTTPException(400, "Kunlik test hozircha mavjud emas")
+
+    answers: dict = payload.get("answers", {})
+    time_taken = int(payload.get("time_taken_seconds") or 0)
+    if time_taken <= 0 or time_taken > DAILY_TIME_LIMIT:
+        time_taken = DAILY_TIME_LIMIT
+
+    score = 0
+    review = []
+    for q in questions:
+        correct = q.correct_option.value
+        chosen = answers.get(str(q.id))
+        ok = chosen == correct
+        if ok:
+            score += 1
+        review.append({
+            "id": q.id,
+            "text": q.text,
+            "option_a": q.option_a,
+            "option_b": q.option_b,
+            "option_c": q.option_c,
+            "option_d": q.option_d,
+            "user_answer": chosen,
+            "correct_answer": correct,
+            "is_correct": ok,
+            "answered": chosen is not None,
+            "explanation": q.explanation,
+        })
+    total = len(questions)
+
+    # Only the first attempt of the day is official (awards points + streak).
+    _, today_done_before, _ = await _daily_stats(db, user.id, daily_quiz.id)
+    official = not today_done_before
+    if official:
+        db.add(QuizAttempt(
+            user_id=user.id,
+            quiz_id=daily_quiz.id,
+            score=score,
+            total=total,
+            time_taken_seconds=time_taken,
+            answers=answers,
+            completed_at=datetime.utcnow(),
+        ))
+        await db.commit()
+
+    streak, today_done, _ = await _daily_stats(db, user.id, daily_quiz.id)
+    return {
+        "score": score,
+        "total": total,
+        "points": score * 2,
+        "points_awarded": (score * 2) if official else 0,
+        "percentage": round(score / total * 100) if total else 0,
+        "official": official,
+        "streak": streak,
+        "today_done": today_done,
+        "review": review,
     }
 
 
