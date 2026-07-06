@@ -175,6 +175,15 @@ img,svg{display:block}
                     sessionStorage.setItem('mk_user', JSON.stringify(this.user));
                 }
             } catch (e) { console.warn('auth failed', e); }
+
+            // Gate: unregistered users must complete /webapp/register first
+            if (this.user && this.user.is_registered === false) {
+                const path = location.pathname;
+                if (!path.endsWith('/webapp/register') && !path.endsWith('/webapp/register/')) {
+                    location.href = '/webapp/register';
+                    return this.user;
+                }
+            }
             return this.user;
         },
 

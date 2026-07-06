@@ -54,6 +54,11 @@ def setup_admin(app: FastAPI) -> None:
         icon="fa fa-trophy",
         url="/admin-tools/leaderboard",
     ))
+    admin.add_view(Link(
+        label="Xabar yuborish",
+        icon="fa fa-bullhorn",
+        url="/admin-tools/broadcast",
+    ))
     admin.add_view(ModuleAdminView(Module, identity="modul"))
     admin.add_view(TopicAdminView(Topic, identity="mavzu"))
     admin.add_view(QuizAdminView(Quiz, identity="test"))

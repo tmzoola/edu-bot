@@ -78,6 +78,16 @@ async def me_page(request: Request):
     return templates.TemplateResponse("profile.html", {"request": request})
 
 
+@pages.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    return templates.TemplateResponse("settings.html", {"request": request})
+
+
+@pages.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    return templates.TemplateResponse("register.html", {"request": request})
+
+
 @pages.get("/daily", response_class=HTMLResponse)
 async def daily_page(request: Request):
     return templates.TemplateResponse("daily.html", {"request": request})
@@ -197,6 +207,8 @@ async def auth(payload: dict[str, Any], db: AsyncSession = Depends(get_db)):
         "first_name": user.first_name,
         "last_name": user.last_name,
         "username": user.username,
+        "phone": user.phone,
+        "is_registered": user.is_registered,
     }
 
 
@@ -562,6 +574,64 @@ async def leaderboard(
         }
         for i, r in enumerate(rows)
     ]
+
+
+@api.get("/me")
+async def get_me(
+    db: AsyncSession = Depends(get_db),
+    x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
+    x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+):
+    user = await _resolve_user(db, x_init_data, x_tg_id)
+    if not user:
+        raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
+    return {
+        "id": user.id,
+        "telegram_id": user.telegram_id,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "username": user.username,
+        "phone": user.phone,
+        "is_registered": user.is_registered,
+    }
+
+
+@api.post("/me/update")
+async def update_me(
+    payload: dict[str, Any],
+    db: AsyncSession = Depends(get_db),
+    x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
+    x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+):
+    user = await _resolve_user(db, x_init_data, x_tg_id)
+    if not user:
+        raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
+
+    full_name = (payload.get("full_name") or "").strip()
+    phone = (payload.get("phone") or "").strip() or None
+
+    if full_name:
+        if not (2 <= len(full_name) <= 100):
+            raise HTTPException(400, "Ism Familya 2 dan 100 gacha belgi bo'lishi kerak")
+        parts = full_name.split(maxsplit=1)
+        user.first_name = parts[0]
+        user.last_name = parts[1] if len(parts) > 1 else None
+
+    if phone is not None and phone != "":
+        cleaned = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+        if len(cleaned) < 7 or len(cleaned) > 20:
+            raise HTTPException(400, "Telefon raqam noto'g'ri")
+        user.phone = phone
+
+    await db.commit()
+    await db.refresh(user)
+    return {
+        "id": user.id,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone": user.phone,
+        "is_registered": user.is_registered,
+    }
 
 
 @api.get("/me/progress")

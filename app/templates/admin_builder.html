@@ -269,6 +269,10 @@ html[data-theme="dark"] .save-summary b{color:#fff}
     <div class="save-bar">
         <div class="save-summary">
             <b id="s-summary">0 ta savol</b> — saqlashga tayyor
+            <label style="display:inline-flex;align-items:center;gap:6px;margin-left:14px;font-weight:600;color:#4b5563;cursor:pointer">
+                <input type="checkbox" id="notify-users" checked style="width:auto;margin:0">
+                <span>Foydalanuvchilarga xabar yuborish</span>
+            </label>
         </div>
         <button class="btn btn-primary" onclick="save()">
             <i class="fa fa-check"></i> Testni saqlash
@@ -464,6 +468,7 @@ async function save() {
                 quiz_description,
                 time_limit_seconds,
                 questions,
+                notify: document.getElementById('notify-users')?.checked ?? true,
             }),
         });
         const data = await r.json();

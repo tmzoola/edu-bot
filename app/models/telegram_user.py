@@ -11,7 +11,12 @@ class TelegramUser(Base):
     first_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     last_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     language_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    @property
+    def is_registered(self) -> bool:
+        return bool(self.phone and (self.first_name or self.last_name))
 
     @property
     def full_name(self) -> str:

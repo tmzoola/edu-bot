@@ -1,3 +1,4 @@
+import asyncio
 import re
 import uuid
 from pathlib import Path
@@ -9,13 +10,14 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.config import ALLOWED_BOOK_EXT, MAX_BOOK_SIZE, MEDIA_ROOT
+from core.config import ALLOWED_BOOK_EXT, MAX_BOOK_SIZE, MEDIA_ROOT, settings
 from db.session import get_db
 from models.book import Book
 from models.module import Module
 from models.question import CorrectOption, Question
 from models.quiz import Quiz
 from models.topic import Topic
+from services.notifications import broadcast, notify_new_quiz
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-tools"])
 templates = Jinja2Templates(directory="templates")
@@ -138,13 +140,19 @@ async def builder_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
     # Capture ids BEFORE commit — attributes expire after commit and would
     # trigger a sync lazy-load on an async session.
     quiz_id = quiz.id
+    quiz_title = quiz.title
     await db.commit()
+
+    notify = bool(payload.get("notify", True))
+    if notify:
+        asyncio.create_task(notify_new_quiz(quiz_id, quiz_title, settings.WEBAPP_URL))
 
     return {
         "ok": True,
         "topic_id": topic_id,
         "quiz_id": quiz_id,
         "questions_saved": saved,
+        "notify_scheduled": notify,
     }
 
 
@@ -243,6 +251,47 @@ async def books_delete(book_id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(book)
     await db.commit()
     return {"ok": True}
+
+
+# ═══ Broadcast tool ═════════════════════════════════════════════════
+
+@router.get("/broadcast", response_class=HTMLResponse)
+async def broadcast_page(request: Request, db: AsyncSession = Depends(get_db)):
+    from models.telegram_user import TelegramUser
+    from sqlalchemy import func
+
+    total = await db.scalar(
+        select(func.count()).select_from(TelegramUser).where(TelegramUser.is_blocked == False)  # noqa: E712
+    ) or 0
+    return templates.TemplateResponse(
+        "admin_broadcast.html",
+        {"request": request, "recipients": int(total)},
+    )
+
+
+@router.post("/broadcast/send")
+async def broadcast_send(payload: dict[str, Any]):
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "Xabar matni kiritilmagan")
+    if len(text) > 4000:
+        raise HTTPException(400, "Xabar juda uzun (maks. 4000 belgi)")
+
+    url = (payload.get("button_url") or "").strip() or None
+    label = (payload.get("button_text") or "").strip() or None
+
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    kb = None
+    if url and label:
+        if not (url.startswith("http://") or url.startswith("https://") or url.startswith("tg://")):
+            raise HTTPException(400, "Havola http(s):// yoki tg:// bilan boshlanishi kerak")
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text=label, url=url)]]
+        )
+
+    stats = await broadcast(text, reply_markup=kb)
+    return {"ok": True, **stats}
 
 
 @router.post("/builder/parse")
