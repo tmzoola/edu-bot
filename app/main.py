@@ -77,6 +77,39 @@ app.add_middleware(
 )
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
+
+@app.middleware("http")
+async def https_proxy_middleware(request: Request, call_next):
+    """
+    Behind a TLS-terminating reverse proxy the app receives plain HTTP, so
+    url_for()/redirects (e.g. starlette-admin's static assets and the login
+    form action) come out as http:// and get blocked as mixed content on an
+    https page. When the proxy signals https via X-Forwarded-Proto, rewrite the
+    request scheme (and host) to https so all generated URLs are https, and add
+    `upgrade-insecure-requests` as a browser-side safety net.
+    """
+    forwarded_proto = request.headers.get("x-forwarded-proto")
+
+    if forwarded_proto == "https":
+        scope = dict(request.scope)
+        scope["scheme"] = "https"
+        forwarded_host = request.headers.get("x-forwarded-host")
+        if forwarded_host:
+            scope["headers"] = [
+                (b"host", forwarded_host.encode()),
+                *[(k, v) for k, v in request.scope["headers"] if k != b"host"],
+            ]
+        request = Request(scope, request.receive)
+
+    response = await call_next(request)
+
+    if forwarded_proto == "https" or request.url.scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        response.headers.setdefault("Content-Security-Policy", "upgrade-insecure-requests")
+
+    return response
+
+
 # Routes
 app.include_router(webapp_pages)
 app.include_router(webapp_api)
@@ -101,4 +134,6 @@ if __name__ == "__main__":
         port=8000,
         log_level="info",
         reload=True,
+        proxy_headers=True,
+        forwarded_allow_ips="*",
     )
