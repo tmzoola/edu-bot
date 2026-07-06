@@ -46,7 +46,7 @@ async def start_handler(msg: Message):
 
     text = (
         f"Assalomu alaykum, <b>{name}</b>! 👋\n\n"
-        "📚 <b>Malaka</b> — bu sizning shaxsiy imtihon tayyorgarlik yordamchingiz.\n\n"
+        "📚 <b>Muslima Darmonova bot</b> — bu sizning shaxsiy imtihon tayyorgarlik yordamchingiz.\n\n"
         "✅ Mavzular va bo'limlar bo'yicha test yechish\n"
         "📊 Natijalaringizni kuzating\n"
         "🏆 O'z ko'rsatkichlaringizni yaxshilang\n\n"
@@ -57,7 +57,7 @@ async def start_handler(msg: Message):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🚀 Malakani ochish",
+                    text="🚀 Muslima Darmonovani ochish",
                     web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/webapp/"),
                 )
             ]

@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Malaka",
+    title="Muslima Darmonova",
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
     redoc_url=None,
@@ -84,13 +84,22 @@ async def https_proxy_middleware(request: Request, call_next):
     Behind a TLS-terminating reverse proxy the app receives plain HTTP, so
     url_for()/redirects (e.g. starlette-admin's static assets and the login
     form action) come out as http:// and get blocked as mixed content on an
-    https page. When the proxy signals https via X-Forwarded-Proto, rewrite the
-    request scheme (and host) to https so all generated URLs are https, and add
-    `upgrade-insecure-requests` as a browser-side safety net.
+    https page. When the deployment is https (proxy header, request scheme, or
+    an https WEBAPP_URL), rewrite the request scheme (and host) to https so all
+    generated URLs are https, and set a CSP with `upgrade-insecure-requests` as
+    a browser-side safety net.
     """
     forwarded_proto = request.headers.get("x-forwarded-proto")
+    # The public deployment is HTTPS whenever the proxy says so, the request is
+    # already https, or WEBAPP_URL is configured as https. The last case covers
+    # proxies that terminate TLS but forget to send X-Forwarded-Proto: https.
+    https_deploy = (
+        forwarded_proto == "https"
+        or request.url.scheme == "https"
+        or settings.WEBAPP_URL.startswith("https://")
+    )
 
-    if forwarded_proto == "https":
+    if https_deploy and request.url.scheme != "https":
         scope = dict(request.scope)
         scope["scheme"] = "https"
         forwarded_host = request.headers.get("x-forwarded-host")
@@ -103,9 +112,21 @@ async def https_proxy_middleware(request: Request, call_next):
 
     response = await call_next(request)
 
-    if forwarded_proto == "https" or request.url.scheme == "https":
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        response.headers.setdefault("Content-Security-Policy", "upgrade-insecure-requests")
+    if https_deploy:
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
+        response.headers["Content-Security-Policy"] = (
+            "upgrade-insecure-requests; "
+            "default-src 'self' https: http:; "
+            "script-src 'self' https: 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' https: 'unsafe-inline'; "
+            "style-src-elem 'self' https: 'unsafe-inline'; "
+            "img-src 'self' https: data: blob:; "
+            "font-src 'self' https: data:; "
+            "connect-src 'self' https: http:; "
+            "frame-ancestors 'self';"
+        )
 
     return response
 
