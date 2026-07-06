@@ -13,6 +13,8 @@
 .hero-stat{flex:1;background:rgba(255,255,255,.15);border-radius:12px;padding:10px 12px;backdrop-filter:blur(6px)}
 .hero-stat .v{font-size:1.1rem;font-weight:800}
 .hero-stat .l{font-size:.68rem;opacity:.85;margin-top:1px}
+.hero-quote{display:none;margin-top:14px;background:rgba(255,255,255,.14);border-radius:12px;padding:10px 12px;font-size:.78rem;line-height:1.5;color:#fff;backdrop-filter:blur(6px);border-left:3px solid rgba(255,255,255,.55)}
+.hero-quote .q-mark{opacity:.7;font-weight:800;margin-right:4px}
 
 .mod-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .mod{background:#fff;border-radius:16px;padding:16px;box-shadow:var(--shadow);transition:.15s;display:flex;flex-direction:column}
@@ -60,6 +62,7 @@
     <div class="hero-stat"><div class="v" id="hi-attempts">0</div><div class="l">Yechilgan</div></div>
     <div class="hero-stat"><div class="v" id="hi-streak">🔥 0</div><div class="l">Seriya</div></div>
   </div>
+  <div class="hero-quote" id="hi-quote"><span class="q-mark">“</span><span id="hi-quote-text"></span><span class="q-mark">”</span></div>
 </div>
 
 <a href="/webapp/daily" class="daily-card">
@@ -97,6 +100,16 @@ const ICONS = ['🧮','📚','🌍','🔬','🎨','⚛️','🧬','📖'];
     const name = user?.first_name || 'do\'stim';
     document.getElementById('hi-name').textContent = name;
     document.getElementById('hi-ava').textContent = name.trim().charAt(0).toUpperCase() || '•';
+
+    // Daily motivational quote
+    fetch('/api/v1/webapp/quote/today', { headers: MK.authHeaders() })
+        .then(r => r.ok ? r.json() : null)
+        .then(q => {
+            if (!q || !q.text) return;
+            const greet = q.name ? `Salom ${q.name}, ` : '';
+            document.getElementById('hi-quote-text').textContent = greet + q.text;
+            document.getElementById('hi-quote').style.display = 'block';
+        }).catch(()=>{});
 
     // Load progress
     fetch('/api/v1/webapp/me/progress', { headers: MK.authHeaders() })

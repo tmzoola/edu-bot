@@ -590,6 +590,66 @@ async def contest_export(contest_id: int, db: AsyncSession = Depends(get_db)):
     )
 
 
+# ═══ Motivational quotes ═══════════════════════════════════════════
+
+@router.get("/quotes", response_class=HTMLResponse)
+async def quotes_page(request: Request, db: AsyncSession = Depends(get_db)):
+    from models.quote import MotivationalQuote
+
+    rows = (
+        await db.execute(
+            select(MotivationalQuote)
+            .where(MotivationalQuote.deletedAt.is_(None))
+            .order_by(desc(MotivationalQuote.id))
+        )
+    ).scalars().all()
+    quotes = [
+        {"id": q.id, "text": q.text, "is_active": q.is_active}
+        for q in rows
+    ]
+    return templates.TemplateResponse(
+        "admin_quotes.html",
+        {"request": request, "quotes": quotes},
+    )
+
+
+@router.post("/quotes/save")
+async def quotes_save(payload: dict[str, Any], db: AsyncSession = Depends(get_db)):
+    from models.quote import MotivationalQuote
+
+    qid = payload.get("id")
+    text = (payload.get("text") or "").strip()
+    is_active = bool(payload.get("is_active", True))
+    if not text or len(text) > 2000:
+        raise HTTPException(400, "Matn bo'sh yoki juda uzun (maks. 2000 belgi)")
+
+    if qid:
+        q = await db.get(MotivationalQuote, qid)
+        if not q or q.deletedAt is not None:
+            raise HTTPException(404, "Quote topilmadi")
+        q.text = text
+        q.is_active = is_active
+    else:
+        q = MotivationalQuote(text=text, is_active=is_active)
+        db.add(q)
+
+    await db.commit()
+    await db.refresh(q)
+    return {"ok": True, "id": q.id}
+
+
+@router.post("/quotes/{quote_id}/delete")
+async def quotes_delete(quote_id: int, db: AsyncSession = Depends(get_db)):
+    from models.quote import MotivationalQuote
+
+    q = await db.get(MotivationalQuote, quote_id)
+    if not q or q.deletedAt is not None:
+        raise HTTPException(404, "Quote topilmadi")
+    q.deletedAt = datetime.now().astimezone()
+    await db.commit()
+    return {"ok": True}
+
+
 # ═══ Broadcast tool ═════════════════════════════════════════════════
 
 @router.get("/broadcast", response_class=HTMLResponse)

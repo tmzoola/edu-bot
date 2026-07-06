@@ -775,6 +775,39 @@ async def my_progress(
     }
 
 
+# ═══ Motivational quote ═════════════════════════════════════════════
+
+@api.get("/quote/today")
+async def quote_today(
+    db: AsyncSession = Depends(get_db),
+    x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
+    x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+):
+    from models.quote import MotivationalQuote
+
+    result = await db.execute(
+        select(MotivationalQuote)
+        .where(MotivationalQuote.is_active == True, MotivationalQuote.deletedAt.is_(None))  # noqa: E712
+        .order_by(MotivationalQuote.id)
+    )
+    quotes = result.scalars().all()
+    if not quotes:
+        return {"text": None, "name": None}
+
+    user = await _resolve_user(db, x_init_data, x_tg_id)
+    seed_parts = [date.today().isoformat()]
+    if user:
+        seed_parts.append(str(user.id))
+    seed = hashlib.md5("|".join(seed_parts).encode()).hexdigest()
+    idx = int(seed, 16) % len(quotes)
+    q = quotes[idx]
+
+    return {
+        "text": q.text,
+        "name": user.first_name if user else None,
+    }
+
+
 # ═══ Books ═══════════════════════════════════════════════════════════
 
 @api.get("/books/categories")

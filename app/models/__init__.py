@@ -6,6 +6,7 @@ from models.telegram_user import TelegramUser
 from models.attempt import QuizAttempt
 from models.book import Book
 from models.contest import Contest, ContestQuestion, ContestAttempt
+from models.quote import MotivationalQuote
 
 __all__ = [
     "Base",
@@ -19,4 +20,5 @@ __all__ = [
     "Contest",
     "ContestQuestion",
     "ContestAttempt",
+    "MotivationalQuote",
 ]

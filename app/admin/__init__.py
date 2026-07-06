@@ -60,6 +60,11 @@ def setup_admin(app: FastAPI) -> None:
         url="/admin-tools/leaderboard",
     ))
     admin.add_view(Link(
+        label="Motivatsiya",
+        icon="fa fa-quote-left",
+        url="/admin-tools/quotes",
+    ))
+    admin.add_view(Link(
         label="Xabar yuborish",
         icon="fa fa-bullhorn",
         url="/admin-tools/broadcast",
