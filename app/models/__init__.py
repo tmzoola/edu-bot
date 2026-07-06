@@ -5,6 +5,7 @@ from models.question import Question, CorrectOption
 from models.telegram_user import TelegramUser
 from models.attempt import QuizAttempt
 from models.book import Book
+from models.contest import Contest, ContestQuestion, ContestAttempt
 
 __all__ = [
     "Base",
@@ -15,4 +16,7 @@ __all__ = [
     "TelegramUser",
     "QuizAttempt",
     "Book",
+    "Contest",
+    "ContestQuestion",
+    "ContestAttempt",
 ]

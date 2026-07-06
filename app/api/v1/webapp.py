@@ -9,7 +9,7 @@ from urllib.parse import parse_qsl
 
 from pathlib import Path as FsPath
 
-from core.config import MEDIA_ROOT, settings
+from core.config import BOOK_CATEGORIES, MEDIA_ROOT, settings
 from db.session import get_db
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
@@ -17,6 +17,7 @@ from fastapi.templating import Jinja2Templates
 from models.attempt import QuizAttempt
 from models.base import TASHKENT_TZ
 from models.book import Book
+from models.contest import Contest, ContestAttempt, ContestQuestion
 from models.module import Module
 from models.question import Question
 from models.quiz import Quiz
@@ -50,7 +51,12 @@ async def modules_page(request: Request):
 
 @pages.get("/modules/{module_id}", response_class=HTMLResponse)
 async def module_topics_page(request: Request, module_id: int):
-    return templates.TemplateResponse("topics.html", {"request": request, "module_id": module_id})
+    # Topics view is hidden from users for now; jumps straight to quizzes.
+    # The template is kept for the future when there will be many quizzes per module.
+    # return templates.TemplateResponse("topics.html", {"request": request, "module_id": module_id})
+    return templates.TemplateResponse(
+        "module_quizzes.html", {"request": request, "module_id": module_id}
+    )
 
 
 @pages.get("/topics/{topic_id}", response_class=HTMLResponse)
@@ -91,6 +97,32 @@ async def register_page(request: Request):
 @pages.get("/daily", response_class=HTMLResponse)
 async def daily_page(request: Request):
     return templates.TemplateResponse("daily.html", {"request": request})
+
+
+@pages.get("/contests", response_class=HTMLResponse)
+async def contests_page(request: Request):
+    return templates.TemplateResponse("contests.html", {"request": request})
+
+
+@pages.get("/contests/{contest_id}", response_class=HTMLResponse)
+async def contest_detail_page(request: Request, contest_id: int):
+    return templates.TemplateResponse(
+        "contest_detail.html", {"request": request, "contest_id": contest_id}
+    )
+
+
+@pages.get("/contests/{contest_id}/play", response_class=HTMLResponse)
+async def contest_play_page(request: Request, contest_id: int):
+    return templates.TemplateResponse(
+        "contest_play.html", {"request": request, "contest_id": contest_id}
+    )
+
+
+@pages.get("/contests/{contest_id}/winners", response_class=HTMLResponse)
+async def contest_winners_web_page(request: Request, contest_id: int):
+    return templates.TemplateResponse(
+        "contest_winners.html", {"request": request, "contest_id": contest_id}
+    )
 
 
 @pages.get("/books", response_class=HTMLResponse)
@@ -237,7 +269,8 @@ async def list_modules(db: AsyncSession = Depends(get_db)):
     )
     modules = result.scalars().all()
 
-    counts = {}
+    counts: dict[int, int] = {}
+    quiz_counts: dict[int, int] = {}
     if modules:
         ids = [m.id for m in modules]
         rows = await db.execute(
@@ -247,6 +280,18 @@ async def list_modules(db: AsyncSession = Depends(get_db)):
         )
         counts = dict(rows.all())
 
+        qrows = await db.execute(
+            select(Topic.module_id, func.count(Quiz.id))
+            .join(Quiz, Quiz.topic_id == Topic.id)
+            .where(
+                Topic.module_id.in_(ids),
+                Topic.is_active == True,  # noqa: E712
+                Quiz.is_active == True,  # noqa: E712
+            )
+            .group_by(Topic.module_id)
+        )
+        quiz_counts = dict(qrows.all())
+
     return [
         {
             "id": m.id,
@@ -255,6 +300,7 @@ async def list_modules(db: AsyncSession = Depends(get_db)):
             "icon": m.icon,
             "color": m.color,
             "topic_count": counts.get(m.id, 0),
+            "quiz_count": quiz_counts.get(m.id, 0),
         }
         for m in modules
     ]
@@ -293,6 +339,53 @@ async def module_topics(module_id: int, db: AsyncSession = Depends(get_db)):
                 "quiz_count": quiz_counts.get(t.id, 0),
             }
             for t in topics
+        ],
+    }
+
+
+@api.get("/modules/{module_id}/quizzes")
+async def module_quizzes(module_id: int, db: AsyncSession = Depends(get_db)):
+    """Flat list of all quizzes across the module's topics (topic screen skipped)."""
+    module = await db.get(Module, module_id)
+    if not module:
+        raise HTTPException(404, "Modul topilmadi")
+
+    quizzes = (
+        await db.execute(
+            select(Quiz)
+            .join(Topic, Topic.id == Quiz.topic_id)
+            .where(
+                Topic.module_id == module_id,
+                Topic.is_active == True,  # noqa: E712
+                Quiz.is_active == True,  # noqa: E712
+            )
+            .options(selectinload(Quiz.topic))
+            .order_by(Topic.order, Topic.id, Quiz.id)
+        )
+    ).scalars().all()
+
+    q_counts: dict[int, int] = {}
+    if quizzes:
+        ids = [q.id for q in quizzes]
+        rows = await db.execute(
+            select(Question.quiz_id, func.count(Question.id))
+            .where(Question.quiz_id.in_(ids))
+            .group_by(Question.quiz_id)
+        )
+        q_counts = dict(rows.all())
+
+    return {
+        "module": {"id": module.id, "title": module.title, "description": module.description},
+        "quizzes": [
+            {
+                "id": q.id,
+                "title": q.title,
+                "description": q.description,
+                "time_limit_seconds": q.time_limit_seconds,
+                "question_count": q_counts.get(q.id, 0),
+                "topic_title": q.topic.title if q.topic else None,
+            }
+            for q in quizzes
         ],
     }
 
@@ -684,6 +777,18 @@ async def my_progress(
 
 # ═══ Books ═══════════════════════════════════════════════════════════
 
+@api.get("/books/categories")
+async def book_categories(db: AsyncSession = Depends(get_db)):
+    """Fixed category chips shown in the WebApp (in order)."""
+    counts_rows = await db.execute(
+        select(Book.category, func.count(Book.id))
+        .where(Book.is_active == True)  # noqa: E712
+        .group_by(Book.category)
+    )
+    counts = {c: n for c, n in counts_rows.all() if c}
+    return [{"name": c, "count": counts.get(c, 0)} for c in BOOK_CATEGORIES]
+
+
 @api.get("/books")
 async def list_books(db: AsyncSession = Depends(get_db)):
     rows = (
@@ -955,6 +1060,271 @@ async def submit_daily(
         "streak": streak,
         "today_done": today_done,
         "review": review,
+    }
+
+
+# ═══ Contests (yutuqli test) ════════════════════════════════════════
+
+def _contest_state(c: Contest, now: datetime) -> str:
+    if not c.is_active:
+        return "inactive"
+    if now < c.start_at:
+        return "upcoming"
+    if now > c.end_at:
+        return "finished"
+    return "live"
+
+
+def _contest_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+@api.get("/contests")
+async def list_contests(
+    db: AsyncSession = Depends(get_db),
+    x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
+    x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+):
+    rows = (
+        await db.execute(
+            select(Contest).where(Contest.is_active == True).order_by(Contest.start_at.desc())  # noqa: E712
+        )
+    ).scalars().all()
+
+    user = await _resolve_user(db, x_init_data, x_tg_id)
+    my_ids: set[int] = set()
+    if user:
+        my_rows = await db.execute(
+            select(ContestAttempt.contest_id).where(ContestAttempt.user_id == user.id)
+        )
+        my_ids = {r[0] for r in my_rows.all()}
+
+    counts_rows = await db.execute(
+        select(ContestAttempt.contest_id, func.count(ContestAttempt.id))
+        .group_by(ContestAttempt.contest_id)
+    )
+    counts = dict(counts_rows.all())
+
+    now = _contest_now()
+    return [
+        {
+            "id": c.id,
+            "title": c.title,
+            "description": c.description,
+            "prize": c.prize,
+            "start_at": c.start_at.isoformat() if c.start_at else None,
+            "end_at": c.end_at.isoformat() if c.end_at else None,
+            "time_limit_seconds": c.time_limit_seconds,
+            "question_count": c.question_count,
+            "participants": counts.get(c.id, 0),
+            "status": _contest_state(c, now),
+            "my_participated": c.id in my_ids,
+        }
+        for c in rows
+    ]
+
+
+@api.get("/contests/{contest_id}")
+async def get_contest(
+    contest_id: int,
+    db: AsyncSession = Depends(get_db),
+    x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
+    x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+):
+    contest = await db.get(Contest, contest_id)
+    if not contest or not contest.is_active:
+        raise HTTPException(404, "Yutuqli test topilmadi")
+
+    participants = await db.scalar(
+        select(func.count()).select_from(ContestAttempt).where(ContestAttempt.contest_id == contest_id)
+    ) or 0
+
+    my_attempt = None
+    user = await _resolve_user(db, x_init_data, x_tg_id)
+    if user:
+        r = await db.execute(
+            select(ContestAttempt).where(
+                ContestAttempt.contest_id == contest_id,
+                ContestAttempt.user_id == user.id,
+            )
+        )
+        a = r.scalar_one_or_none()
+        if a:
+            my_attempt = {
+                "score": a.score,
+                "total": a.total,
+                "percentage": a.percentage,
+                "time_taken_seconds": a.time_taken_seconds,
+                "completed_at": a.completed_at.strftime("%d.%m.%Y %H:%M") if a.completed_at else "",
+            }
+
+    now = _contest_now()
+    return {
+        "id": contest.id,
+        "title": contest.title,
+        "description": contest.description,
+        "prize": contest.prize,
+        "start_at": contest.start_at.isoformat() if contest.start_at else None,
+        "end_at": contest.end_at.isoformat() if contest.end_at else None,
+        "time_limit_seconds": contest.time_limit_seconds,
+        "question_count": contest.question_count,
+        "participants": int(participants),
+        "status": _contest_state(contest, now),
+        "my_attempt": my_attempt,
+    }
+
+
+@api.get("/contests/{contest_id}/questions")
+async def get_contest_questions(
+    contest_id: int,
+    db: AsyncSession = Depends(get_db),
+    x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
+    x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+):
+    user = await _resolve_user(db, x_init_data, x_tg_id)
+    if not user:
+        raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
+
+    contest = await db.get(Contest, contest_id)
+    if not contest or not contest.is_active:
+        raise HTTPException(404, "Yutuqli test topilmadi")
+
+    now = _contest_now()
+    state = _contest_state(contest, now)
+    if state == "upcoming":
+        raise HTTPException(400, "Test hali boshlanmadi")
+    if state == "finished":
+        raise HTTPException(400, "Test tugadi")
+
+    # One attempt per user
+    r = await db.execute(
+        select(ContestAttempt).where(
+            ContestAttempt.contest_id == contest_id, ContestAttempt.user_id == user.id
+        )
+    )
+    if r.scalar_one_or_none():
+        raise HTTPException(400, "Siz allaqachon ishtirok etgansiz")
+
+    return {
+        "id": contest.id,
+        "title": contest.title,
+        "time_limit_seconds": contest.time_limit_seconds,
+        "questions": [
+            {
+                "id": q.id,
+                "text": q.text,
+                "option_a": q.option_a,
+                "option_b": q.option_b,
+                "option_c": q.option_c,
+                "option_d": q.option_d,
+            }
+            for q in sorted(contest.questions, key=lambda x: x.order)
+        ],
+    }
+
+
+@api.post("/contests/{contest_id}/submit")
+async def submit_contest(
+    contest_id: int,
+    payload: dict[str, Any],
+    db: AsyncSession = Depends(get_db),
+    x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
+    x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+):
+    user = await _resolve_user(db, x_init_data, x_tg_id)
+    if not user:
+        raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
+
+    contest = await db.get(Contest, contest_id)
+    if not contest or not contest.is_active:
+        raise HTTPException(404, "Yutuqli test topilmadi")
+
+    now = _contest_now()
+    state = _contest_state(contest, now)
+    if state in ("upcoming", "finished", "inactive"):
+        raise HTTPException(400, "Test hozir yechish uchun ochiq emas")
+
+    r = await db.execute(
+        select(ContestAttempt).where(
+            ContestAttempt.contest_id == contest_id, ContestAttempt.user_id == user.id
+        )
+    )
+    if r.scalar_one_or_none():
+        raise HTTPException(400, "Siz allaqachon ishtirok etgansiz")
+
+    answers: dict = payload.get("answers", {})
+    time_taken = int(payload.get("time_taken_seconds") or 0)
+    if time_taken <= 0 or time_taken > contest.time_limit_seconds:
+        time_taken = contest.time_limit_seconds
+
+    score = 0
+    total = len(contest.questions)
+    for q in contest.questions:
+        chosen = answers.get(str(q.id))
+        if chosen and chosen == q.correct_option.value:
+            score += 1
+
+    attempt = ContestAttempt(
+        user_id=user.id,
+        contest_id=contest_id,
+        score=score,
+        total=total,
+        time_taken_seconds=time_taken,
+        answers=answers,
+        completed_at=datetime.now(timezone.utc),
+    )
+    db.add(attempt)
+    await db.commit()
+
+    return {
+        "score": score,
+        "total": total,
+        "percentage": round(score / total * 100) if total else 0,
+        "time_taken_seconds": time_taken,
+    }
+
+
+@api.get("/contests/{contest_id}/winners")
+async def get_contest_winners(
+    contest_id: int,
+    db: AsyncSession = Depends(get_db),
+    limit: int = 50,
+):
+    contest = await db.get(Contest, contest_id)
+    if not contest:
+        raise HTTPException(404, "Yutuqli test topilmadi")
+
+    rows = (
+        await db.execute(
+            select(ContestAttempt)
+            .where(ContestAttempt.contest_id == contest_id)
+            .options(selectinload(ContestAttempt.user))
+            .order_by(desc(ContestAttempt.score), ContestAttempt.time_taken_seconds)
+            .limit(limit)
+        )
+    ).scalars().all()
+
+    now = _contest_now()
+    return {
+        "contest": {
+            "id": contest.id,
+            "title": contest.title,
+            "prize": contest.prize,
+            "status": _contest_state(contest, now),
+            "end_at": contest.end_at.isoformat() if contest.end_at else None,
+        },
+        "winners": [
+            {
+                "rank": i + 1,
+                "name": (a.user.first_name or a.user.username or f"#{a.user.telegram_id}"),
+                "username": a.user.username,
+                "score": a.score,
+                "total": a.total,
+                "percentage": a.percentage,
+                "time_taken_seconds": a.time_taken_seconds,
+            }
+            for i, a in enumerate(rows)
+        ],
     }
 
 

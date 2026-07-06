@@ -1,23 +1,28 @@
 import asyncio
+import io
 import re
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from core.config import ALLOWED_BOOK_EXT, MAX_BOOK_SIZE, MEDIA_ROOT, settings
+from core.config import ALLOWED_BOOK_EXT, BOOK_CATEGORIES, MAX_BOOK_SIZE, MEDIA_ROOT, settings
 from db.session import get_db
 from models.book import Book
+from models.contest import Contest, ContestAttempt, ContestQuestion
 from models.module import Module
 from models.question import CorrectOption, Question
 from models.quiz import Quiz
+from models.telegram_user import TelegramUser
 from models.topic import Topic
-from services.notifications import broadcast, notify_new_quiz
+from services.notifications import broadcast, notify_new_contest, notify_new_quiz
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-tools"])
 templates = Jinja2Templates(directory="templates")
@@ -162,13 +167,16 @@ async def builder_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
 async def books_page(request: Request, db: AsyncSession = Depends(get_db)):
     topics = (await db.execute(select(Topic).order_by(Topic.order, Topic.id))).scalars().all()
     books = (await db.execute(select(Book).order_by(Book.createdAt.desc()))).scalars().all()
-    categories = sorted({b.category for b in books if b.category})
+    used = {b.category for b in books if b.category}
+    # Fixed list first, then any extra categories admin has previously typed.
+    categories = list(BOOK_CATEGORIES) + sorted(used - set(BOOK_CATEGORIES))
     return templates.TemplateResponse(
         "admin_books.html",
         {
             "request": request,
             "topics": [{"id": t.id, "title": t.title} for t in topics],
             "categories": categories,
+            "default_categories": BOOK_CATEGORIES,
             "books": [
                 {
                     "id": b.id,
@@ -251,6 +259,335 @@ async def books_delete(book_id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(book)
     await db.commit()
     return {"ok": True}
+
+
+# ═══ Contests (yutuqli test) ════════════════════════════════════════
+
+def _parse_dt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    s = value.strip().replace("Z", "+00:00")
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError:
+        raise HTTPException(400, f"Sana formati noto'g'ri: {value}")
+
+
+def _contest_status(c: Contest, now: datetime) -> str:
+    if not c.is_active:
+        return "inactive"
+    if now < c.start_at:
+        return "upcoming"
+    if now > c.end_at:
+        return "finished"
+    return "live"
+
+
+@router.get("/contests", response_class=HTMLResponse)
+async def contests_page(request: Request, db: AsyncSession = Depends(get_db)):
+    rows = (
+        await db.execute(select(Contest).order_by(desc(Contest.start_at)))
+    ).scalars().all()
+
+    counts_rows = await db.execute(
+        select(ContestAttempt.contest_id, func.count(ContestAttempt.id))
+        .group_by(ContestAttempt.contest_id)
+    )
+    counts = dict(counts_rows.all())
+
+    now = datetime.now().astimezone()
+    contests = []
+    for c in rows:
+        q_count = len(c.questions)
+        contests.append({
+            "id": c.id,
+            "title": c.title,
+            "prize": c.prize,
+            "start_at": c.start_at.isoformat() if c.start_at else "",
+            "end_at": c.end_at.isoformat() if c.end_at else "",
+            "question_count": c.question_count,
+            "questions_saved": q_count,
+            "time_limit_seconds": c.time_limit_seconds,
+            "is_active": c.is_active,
+            "status": _contest_status(c, now),
+            "participants": counts.get(c.id, 0),
+        })
+    return templates.TemplateResponse(
+        "admin_contests.html",
+        {"request": request, "contests": contests},
+    )
+
+
+@router.get("/contests/new", response_class=HTMLResponse)
+async def contest_builder_page(request: Request):
+    return templates.TemplateResponse(
+        "admin_contest_builder.html",
+        {"request": request, "contest": None},
+    )
+
+
+@router.get("/contests/{contest_id}/edit", response_class=HTMLResponse)
+async def contest_edit_page(contest_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    contest = await db.get(Contest, contest_id)
+    if not contest:
+        raise HTTPException(404, "Yutuqli test topilmadi")
+    data = {
+        "id": contest.id,
+        "title": contest.title,
+        "description": contest.description or "",
+        "prize": contest.prize or "",
+        "start_at": contest.start_at.isoformat() if contest.start_at else "",
+        "end_at": contest.end_at.isoformat() if contest.end_at else "",
+        "time_limit_seconds": contest.time_limit_seconds,
+        "question_count": contest.question_count,
+        "is_active": contest.is_active,
+        "questions": [
+            {
+                "text": q.text,
+                "option_a": q.option_a,
+                "option_b": q.option_b,
+                "option_c": q.option_c,
+                "option_d": q.option_d,
+                "correct": q.correct_option.value,
+                "explanation": q.explanation or "",
+            }
+            for q in sorted(contest.questions, key=lambda x: x.order)
+        ],
+    }
+    return templates.TemplateResponse(
+        "admin_contest_builder.html",
+        {"request": request, "contest": data},
+    )
+
+
+@router.post("/contests/save")
+async def contest_save(payload: dict[str, Any], db: AsyncSession = Depends(get_db)):
+    contest_id = payload.get("id")
+
+    title = (payload.get("title") or "").strip()
+    if not title:
+        raise HTTPException(400, "Sarlavha kiritilmagan")
+
+    start_at = _parse_dt(payload.get("start_at"))
+    end_at = _parse_dt(payload.get("end_at"))
+    if not start_at or not end_at:
+        raise HTTPException(400, "Boshlanish va tugash sanalari kerak")
+    if end_at <= start_at:
+        raise HTTPException(400, "Tugash sanasi boshlanishdan keyin bo'lishi kerak")
+
+    question_count = int(payload.get("question_count") or 50)
+    time_limit = int(payload.get("time_limit_seconds") or 3000)
+
+    questions_in: list[dict] = payload.get("questions") or []
+    valid_questions = []
+    for q in questions_in:
+        text = (q.get("text") or "").strip()
+        a = (q.get("option_a") or "").strip()
+        b = (q.get("option_b") or "").strip()
+        c_ = (q.get("option_c") or "").strip()
+        d = (q.get("option_d") or "").strip()
+        correct = (q.get("correct") or "A").strip().upper()
+        if not (text and a and b and c_ and d):
+            continue
+        if correct not in ("A", "B", "C", "D"):
+            correct = "A"
+        valid_questions.append({
+            "text": text, "option_a": a, "option_b": b, "option_c": c_, "option_d": d,
+            "correct": correct, "explanation": (q.get("explanation") or "").strip() or None,
+        })
+
+    if len(valid_questions) < question_count:
+        raise HTTPException(
+            400,
+            f"Kamida {question_count} ta to'liq savol kerak (hozir: {len(valid_questions)})",
+        )
+
+    if contest_id:
+        contest = await db.get(Contest, int(contest_id))
+        if not contest:
+            raise HTTPException(404, "Yutuqli test topilmadi")
+        contest.title = title
+        contest.description = (payload.get("description") or "").strip() or None
+        contest.prize = (payload.get("prize") or "").strip() or None
+        contest.start_at = start_at
+        contest.end_at = end_at
+        contest.time_limit_seconds = time_limit
+        contest.question_count = question_count
+        contest.is_active = bool(payload.get("is_active", True))
+        # Replace questions
+        for old in list(contest.questions):
+            await db.delete(old)
+        await db.flush()
+        is_new = False
+    else:
+        contest = Contest(
+            title=title,
+            description=(payload.get("description") or "").strip() or None,
+            prize=(payload.get("prize") or "").strip() or None,
+            start_at=start_at,
+            end_at=end_at,
+            time_limit_seconds=time_limit,
+            question_count=question_count,
+            is_active=bool(payload.get("is_active", True)),
+        )
+        db.add(contest)
+        await db.flush()
+        is_new = True
+
+    for i, q in enumerate(valid_questions, start=1):
+        db.add(ContestQuestion(
+            contest_id=contest.id,
+            order=i,
+            text=q["text"],
+            option_a=q["option_a"], option_b=q["option_b"],
+            option_c=q["option_c"], option_d=q["option_d"],
+            correct_option=CorrectOption(q["correct"]),
+            explanation=q["explanation"],
+        ))
+
+    cid = contest.id
+    ctitle = contest.title
+    cprize = contest.prize
+    cstart_iso = contest.start_at.strftime("%d.%m.%Y %H:%M")
+    await db.commit()
+
+    notify = bool(payload.get("notify", is_new))
+    if notify and is_new:
+        asyncio.create_task(
+            notify_new_contest(cid, ctitle, cprize, cstart_iso, settings.WEBAPP_URL)
+        )
+
+    return {"ok": True, "id": cid, "questions_saved": len(valid_questions), "notify_scheduled": notify and is_new}
+
+
+@router.post("/contests/{contest_id}/delete")
+async def contest_delete(contest_id: int, db: AsyncSession = Depends(get_db)):
+    contest = await db.get(Contest, contest_id)
+    if not contest:
+        raise HTTPException(404, "Yutuqli test topilmadi")
+    await db.delete(contest)
+    await db.commit()
+    return {"ok": True}
+
+
+@router.get("/contests/{contest_id}/winners", response_class=HTMLResponse)
+async def contest_winners_page(contest_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    contest = await db.get(Contest, contest_id)
+    if not contest:
+        raise HTTPException(404, "Yutuqli test topilmadi")
+
+    rows = (
+        await db.execute(
+            select(ContestAttempt)
+            .where(ContestAttempt.contest_id == contest_id)
+            .options(selectinload(ContestAttempt.user))
+            .order_by(desc(ContestAttempt.score), ContestAttempt.time_taken_seconds)
+        )
+    ).scalars().all()
+
+    participants = []
+    for i, a in enumerate(rows, start=1):
+        u = a.user
+        full = " ".join(filter(None, [u.first_name, u.last_name])) or u.username or f"#{u.telegram_id}"
+        participants.append({
+            "rank": i,
+            "name": full,
+            "username": u.username,
+            "phone": u.phone,
+            "score": a.score,
+            "total": a.total,
+            "percentage": a.percentage,
+            "time_taken_seconds": a.time_taken_seconds,
+            "completed_at": a.completed_at.strftime("%d.%m.%Y %H:%M") if a.completed_at else "",
+        })
+
+    return templates.TemplateResponse(
+        "admin_contest_winners.html",
+        {
+            "request": request,
+            "contest": {
+                "id": contest.id,
+                "title": contest.title,
+                "prize": contest.prize,
+                "start_at": contest.start_at.strftime("%d.%m.%Y %H:%M"),
+                "end_at": contest.end_at.strftime("%d.%m.%Y %H:%M"),
+            },
+            "participants": participants,
+        },
+    )
+
+
+@router.get("/contests/{contest_id}/export")
+async def contest_export(contest_id: int, db: AsyncSession = Depends(get_db)):
+    contest = await db.get(Contest, contest_id)
+    if not contest:
+        raise HTTPException(404, "Yutuqli test topilmadi")
+
+    rows = (
+        await db.execute(
+            select(ContestAttempt)
+            .where(ContestAttempt.contest_id == contest_id)
+            .options(selectinload(ContestAttempt.user))
+            .order_by(desc(ContestAttempt.score), ContestAttempt.time_taken_seconds)
+        )
+    ).scalars().all()
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Ishtirokchilar"
+
+    headers = [
+        "O'rin", "Ism Familya", "Username", "Telegram ID", "Telefon",
+        "To'g'ri javob", "Jami savol", "Foiz (%)", "Vaqt (soniya)",
+        "Vaqt (mm:ss)", "Tugatgan sana",
+    ]
+    ws.append(headers)
+
+    header_fill = PatternFill(start_color="6C63F6", end_color="6C63F6", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for i, a in enumerate(rows, start=1):
+        u = a.user
+        full = " ".join(filter(None, [u.first_name, u.last_name])) or ""
+        mmss = f"{a.time_taken_seconds // 60:02d}:{a.time_taken_seconds % 60:02d}"
+        ws.append([
+            i,
+            full,
+            u.username or "",
+            u.telegram_id,
+            u.phone or "",
+            a.score,
+            a.total,
+            a.percentage,
+            a.time_taken_seconds,
+            mmss,
+            a.completed_at.strftime("%d.%m.%Y %H:%M") if a.completed_at else "",
+        ])
+
+    widths = [6, 28, 20, 16, 18, 14, 12, 10, 14, 12, 20]
+    for col, w in enumerate(widths, start=1):
+        ws.column_dimensions[chr(64 + col)].width = w
+
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "_", contest.title)[:40] or f"contest_{contest_id}"
+    filename = f"{safe}_ishtirokchilar.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ═══ Broadcast tool ═════════════════════════════════════════════════

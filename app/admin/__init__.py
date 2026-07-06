@@ -45,6 +45,11 @@ def setup_admin(app: FastAPI) -> None:
         url="/admin-tools/builder",
     ))
     admin.add_view(Link(
+        label="Yutuqli testlar",
+        icon="fa fa-trophy",
+        url="/admin-tools/contests",
+    ))
+    admin.add_view(Link(
         label="Kitob yuklash",
         icon="fa fa-file-arrow-up",
         url="/admin-tools/books",

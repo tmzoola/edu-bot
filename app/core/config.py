@@ -14,6 +14,16 @@ ALLOWED_BOOK_EXT = {
 }
 MAX_BOOK_SIZE = 100 * 1024 * 1024  # 100 MB
 
+# Fixed book categories shown in the WebApp. Admin can still upload with
+# custom categories for subjects not in this list — those simply won't appear
+# as a default chip but are stored on the Book row unchanged.
+BOOK_CATEGORIES = [
+    "Tarbiyachilar",
+    "Direktor o'rinbosari",
+    "Psixologlar",
+    "Logopedlar",
+]
+
 
 class Settings(BaseSettings):
     APP_MODE: str = "DEV"

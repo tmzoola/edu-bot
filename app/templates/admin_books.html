@@ -121,13 +121,17 @@ html[data-theme="dark"] .toast{background:#1e2439;border-color:rgba(255,255,255,
                 <label class="label">Muallif</label>
                 <input class="input" id="f-author" placeholder="Ixtiyoriy">
 
-                <label class="label">Turi</label>
-                <input class="input" id="f-category" list="cats" placeholder="Darslik / Qo'llanma / Qonun hujjati…">
+                <label class="label">Yo'nalish *</label>
+                <input class="input" id="f-category" list="cats"
+                       placeholder="Tarbiyachilar / Direktor o'rinbosari / Psixologlar / Logopedlar…">
                 <datalist id="cats">
-                    <option value="Darslik"><option value="Qo'llanma"><option value="Qonun hujjati">
-                    <option value="Metodik"><option value="Badiiy">
                     {% for c in categories %}<option value="{{ c }}">{% endfor %}
                 </datalist>
+                <div style="margin-top:6px;font-size:.72rem;color:#6b7280">
+                    Asosiy yo'nalishlar:
+                    {% for c in default_categories %}<b style="color:#111827">{{ c }}</b>{% if not loop.last %} · {% endif %}{% endfor %}.
+                    Boshqa fanlar uchun o'zingiz kiriting.
+                </div>
 
                 <label class="label">Mavzu (ixtiyoriy)</label>
                 <select class="select" id="f-topic">

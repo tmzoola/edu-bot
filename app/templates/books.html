@@ -60,6 +60,7 @@
 {% block script %}
 <script>
 let BOOKS = [];
+let CATEGORIES = [];
 let CAT = '';
 
 const EXT_COLORS = {
@@ -70,19 +71,24 @@ const EXT_COLORS = {
 (async function(){
     await MK.ensureAuth();
     try {
-        const r = await fetch('/api/v1/webapp/books');
-        BOOKS = await r.json();
-    } catch(e){ BOOKS = []; }
+        const [rc, rb] = await Promise.all([
+            fetch('/api/v1/webapp/books/categories'),
+            fetch('/api/v1/webapp/books'),
+        ]);
+        CATEGORIES = await rc.json();
+        BOOKS = await rb.json();
+    } catch(e){ CATEGORIES = []; BOOKS = []; }
+    if (CATEGORIES.length) CAT = CATEGORIES[0].name;
     buildChips();
     render();
 })();
 
 function buildChips(){
-    const cats = [...new Set(BOOKS.map(b => b.category).filter(Boolean))];
     const el = document.getElementById('chips');
-    if (!cats.length){ el.style.display='none'; return; }
-    el.innerHTML = `<div class="chip active" data-c="">Barchasi</div>` +
-        cats.map(c => `<div class="chip" data-c="${esc(c)}">${esc(c)}</div>`).join('');
+    if (!CATEGORIES.length){ el.style.display='none'; return; }
+    el.innerHTML = CATEGORIES.map(c =>
+        `<div class="chip ${c.name===CAT?'active':''}" data-c="${esc(c.name)}">${esc(c.name)}${c.count ? ` <span style="opacity:.7">(${c.count})</span>` : ''}</div>`
+    ).join('');
     el.querySelectorAll('.chip').forEach(ch => {
         ch.onclick = () => {
             MK.haptic('light');
@@ -104,7 +110,9 @@ function render(){
         (!CAT || b.category === CAT) &&
         (!q || (b.title + ' ' + (b.author||'') + ' ' + (b.topic||'')).toLowerCase().includes(q))
     );
-    document.getElementById('count-sub').textContent = `${BOOKS.length} ta kitob`;
+    document.getElementById('count-sub').textContent = CAT
+        ? `${CAT} · ${items.length} ta`
+        : `${BOOKS.length} ta kitob`;
     document.getElementById('empty').style.display = items.length ? 'none' : '';
     document.getElementById('list').innerHTML = items.map(b => {
         const color = EXT_COLORS[b.ext] || '#64748B';
