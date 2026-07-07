@@ -15,12 +15,14 @@ class TelegramUserAdminView(BaseAdminView):
         StringField("first_name", label="Ism", read_only=True),
         StringField("last_name", label="Familiya", read_only=True),
         StringField("language_code", label="Til", read_only=True),
-        BooleanField("is_blocked", label="Bloklangan"),
+        StringField("phone", label="Telefon", read_only=True),
+        BooleanField("is_banned", label="Qora ro'yxat (bloklash)"),
+        BooleanField("is_blocked", label="Botni bloklagan", read_only=True),
     ]
 
-    column_list = ["id", "telegram_id", "username", "first_name", "is_blocked", "createdAt"]
-    column_searchable_list = ["username", "first_name", "last_name"]
-    column_sortable_list = ["is_blocked", "createdAt"]
+    column_list = ["id", "telegram_id", "username", "first_name", "phone", "is_banned", "is_blocked", "createdAt"]
+    column_searchable_list = ["username", "first_name", "last_name", "phone"]
+    column_sortable_list = ["is_banned", "is_blocked", "createdAt"]
 
     def can_create(self, request: Request) -> bool:
         return False

@@ -14,7 +14,10 @@ logger = logging.getLogger(__name__)
 async def _target_user_ids() -> list[int]:
     async with session_factory() as session:
         rows = await session.execute(
-            select(TelegramUser.telegram_id).where(TelegramUser.is_blocked == False)  # noqa: E712
+            select(TelegramUser.telegram_id).where(
+                TelegramUser.is_blocked == False,  # noqa: E712
+                TelegramUser.is_banned == False,  # noqa: E712
+            )
         )
         return [r[0] for r in rows.all()]
 

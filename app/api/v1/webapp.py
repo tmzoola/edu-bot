@@ -173,11 +173,15 @@ async def _get_or_create_tg_user(db: AsyncSession, tg_data: dict[str, Any]) -> T
     result = await db.execute(select(TelegramUser).where(TelegramUser.telegram_id == tg_id))
     user = result.scalar_one_or_none()
     if user:
-        # Refresh basic fields
-        user.first_name = tg_data.get("first_name") or user.first_name
-        user.last_name = tg_data.get("last_name") or user.last_name
+        # Keep Telegram-managed fields in sync, but DO NOT overwrite the
+        # user's name — they can edit it in WebApp settings, and re-syncing
+        # from initData on every request would revert those edits.
         user.username = tg_data.get("username") or user.username
         user.language_code = tg_data.get("language_code") or user.language_code
+        if not user.first_name:
+            user.first_name = tg_data.get("first_name")
+        if not user.last_name:
+            user.last_name = tg_data.get("last_name")
         return user
     user = TelegramUser(
         telegram_id=tg_id,
@@ -202,6 +206,8 @@ async def _resolve_user(
         if tg:
             user = await _get_or_create_tg_user(db, tg)
             await db.commit()
+            if user.is_banned:
+                raise HTTPException(403, "Siz bloklangansiz")
             return user
     if x_tg_id and settings.APP_MODE != "PRODUCTION":
         # Dev fallback so we can test without Telegram WebApp environment
@@ -212,6 +218,8 @@ async def _resolve_user(
             db.add(user)
             await db.commit()
             await db.refresh(user)
+        if user.is_banned:
+            raise HTTPException(403, "Siz bloklangansiz")
         return user
     return None
 
@@ -232,6 +240,9 @@ async def auth(payload: dict[str, Any], db: AsyncSession = Depends(get_db)):
 
     user = await _get_or_create_tg_user(db, tg)
     await db.commit()
+
+    if user.is_banned:
+        raise HTTPException(403, "Siz bloklangansiz")
 
     return {
         "id": user.id,

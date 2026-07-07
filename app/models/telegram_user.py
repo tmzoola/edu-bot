@@ -12,7 +12,10 @@ class TelegramUser(Base):
     last_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     language_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Bot could not deliver messages (user blocked the bot) — auto-managed.
     is_blocked: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Admin blacklist — user is forbidden from using the bot and WebApp.
+    is_banned: Mapped[bool] = mapped_column(Boolean, default=False)
 
     @property
     def is_registered(self) -> bool:

@@ -174,6 +174,7 @@ img,svg{display:block}
                     headers: {'Content-Type':'application/json'},
                     body: JSON.stringify(payload),
                 });
+                if (r.status === 403) { this.showBlocked(); return null; }
                 if (r.ok) {
                     this.user = await r.json();
                     sessionStorage.setItem('mk_user', JSON.stringify(this.user));
@@ -196,6 +197,18 @@ img,svg{display:block}
             if (this.initData) h['X-Init-Data'] = this.initData;
             if (this.user?.telegram_id) h['X-Telegram-Id'] = String(this.user.telegram_id);
             return h;
+        },
+
+        showBlocked(){
+            document.body.innerHTML =
+                '<div style="position:fixed;inset:0;display:flex;flex-direction:column;'
+                + 'align-items:center;justify-content:center;text-align:center;padding:32px;'
+                + 'gap:14px;background:#F9FAFB;color:#111;font-family:inherit">'
+                + '<div style="font-size:56px">⛔</div>'
+                + '<div style="font-size:1.2rem;font-weight:800">Siz bloklangansiz</div>'
+                + '<div style="font-size:.9rem;color:#6b7280;max-width:320px">'
+                + 'Hisobingiz administrator tomonidan bloklangan. '
+                + 'Iltimos, bot administratori bilan bog\'laning.</div></div>';
         },
 
         fmtTime(s){
