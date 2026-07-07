@@ -18,6 +18,7 @@ from models.attempt import QuizAttempt
 from models.base import TASHKENT_TZ
 from models.book import Book
 from models.contest import Contest, ContestAttempt, ContestQuestion
+from models.landing import LandingContent
 from models.module import Module
 from models.question import Question
 from models.quiz import Quiz
@@ -40,8 +41,11 @@ templates = Jinja2Templates(directory="templates")
 # ═══ HTML pages ══════════════════════════════════════════════════════
 
 @pages.get("/", response_class=HTMLResponse)
-async def landing(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+async def landing(request: Request, db: AsyncSession = Depends(get_db)):
+    row = (await db.execute(
+        select(LandingContent).where(LandingContent.deletedAt.is_(None)).limit(1)
+    )).scalar_one_or_none()
+    return templates.TemplateResponse("index.html", {"request": request, "content": row})
 
 
 @pages.get("/modules", response_class=HTMLResponse)

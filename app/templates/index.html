@@ -109,20 +109,20 @@ button{border:none;background:none;cursor:pointer;font-family:inherit}
 </header>
 
 <div class="content">
-  <div class="badge"><span class="badge-dot"></span>Har kuni yangi savollar · bepul</div>
+  <div class="badge"><span class="badge-dot"></span>{{ content.badge_text if content else 'Har kuni yangi savollar · bepul' }}</div>
 
-  <h1 class="hero-title">Har kuni oz-ozdan,<br><span class="green">test</span> bilan o'sing</h1>
+  <h1 class="hero-title">{{ content.hero_title_before if content else 'Har kuni oz-ozdan,' }}<br><span class="green">{{ content.hero_title_highlight if content else 'test' }}</span> {{ content.hero_title_after if content else "bilan o'sing" }}</h1>
 
-  <p class="hero-sub">Muslima Darmonova — pedagoglar uchun tayyorgarlik platformasi: mavzulashtirilgan testlar, kunlik challenge, xatolar tahlili va umumiy reyting. Hammasi Telegram ichida.</p>
+  <p class="hero-sub">{{ content.hero_subtitle if content else 'Muslima Darmonova — pedagoglar uchun tayyorgarlik platformasi: mavzulashtirilgan testlar, kunlik challenge, xatolar tahlili va umumiy reyting. Hammasi Telegram ichida.' }}</p>
 
-  <a href="/webapp/modules" class="btn-primary">Boshlash</a>
-  <button class="btn-secondary" onclick="document.querySelector('.steps-title').scrollIntoView({behavior:'smooth'})">Qanday ishlaydi?</button>
+  <a href="/webapp/modules" class="btn-primary">{{ content.primary_btn_label if content else 'Boshlash' }}</a>
+  <button class="btn-secondary" onclick="document.querySelector('.steps-title').scrollIntoView({behavior:'smooth'})">{{ content.secondary_btn_label if content else 'Qanday ishlaydi?' }}</button>
 
   {# ── Bugungi kunlik test (live) ─────────────────────────────── #}
   <a href="/webapp/daily" class="daily" id="daily">
     <div class="daily-ic">🔥</div>
     <div class="daily-b">
-      <div class="daily-t">Bugungi kunlik test</div>
+      <div class="daily-t">{{ content.daily_title if content else 'Bugungi kunlik test' }}</div>
       <div class="daily-s" id="daily-s">…</div>
     </div>
     <div class="daily-go">→</div>

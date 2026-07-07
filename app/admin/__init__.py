@@ -3,6 +3,7 @@ from pathlib import Path
 from admin.auth import AdminAuth
 from admin.i18n_uz import install_uzbek
 from admin.views.book import BookAdminView
+from admin.views.landing import LandingContentAdminView
 from admin.views.module import ModuleAdminView
 from admin.views.question import QuestionAdminView
 from admin.views.quiz import QuizAdminView
@@ -11,6 +12,7 @@ from admin.views.topic import TopicAdminView
 from db.session import engine
 from fastapi import FastAPI
 from models.book import Book
+from models.landing import LandingContent
 from models.module import Module
 from models.question import Question
 from models.quiz import Quiz
@@ -75,5 +77,6 @@ def setup_admin(app: FastAPI) -> None:
     admin.add_view(QuestionAdminView(Question, identity="savol"))
     admin.add_view(BookAdminView(Book, identity="kitob"))
     admin.add_view(TelegramUserAdminView(TelegramUser, identity="foydalanuvchi"))
+    admin.add_view(LandingContentAdminView(LandingContent, identity="bosh-sahifa-matni"))
 
     admin.mount_to(app)

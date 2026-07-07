@@ -7,6 +7,7 @@ from models.attempt import QuizAttempt
 from models.book import Book
 from models.contest import Contest, ContestQuestion, ContestAttempt
 from models.quote import MotivationalQuote
+from models.landing import LandingContent
 
 __all__ = [
     "Base",
@@ -21,4 +22,5 @@ __all__ = [
     "ContestQuestion",
     "ContestAttempt",
     "MotivationalQuote",
+    "LandingContent",
 ]
