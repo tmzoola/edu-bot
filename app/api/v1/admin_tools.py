@@ -13,8 +13,18 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from core.config import ALLOWED_BOOK_EXT, BOOK_CATEGORIES, MAX_BOOK_SIZE, MEDIA_ROOT, settings
+from core.config import (
+    ALLOWED_BOOK_EXT,
+    ALLOWED_IMAGE_EXT,
+    BOOK_CATEGORIES,
+    MAX_BOOK_SIZE,
+    MAX_IMAGE_SIZE,
+    MEDIA_ROOT,
+    QUESTION_IMAGES_DIR_NAME,
+    settings,
+)
 from db.session import get_db
+from models.attempt import QuizAttempt
 from models.book import Book
 from models.contest import Contest, ContestAttempt, ContestQuestion
 from models.module import Module
@@ -33,6 +43,99 @@ BOOKS_DIR = MEDIA_ROOT / "books"
 @router.get("/leaderboard", response_class=HTMLResponse)
 async def admin_leaderboard_page(request: Request):
     return templates.TemplateResponse("admin_leaderboard.html", {"request": request})
+
+
+_PERIOD_LABELS = {"day": "Bugun", "week": "Hafta", "month": "Oy", "all": "Butun_davr"}
+
+
+@router.get("/leaderboard/export")
+async def leaderboard_export(period: str = "all", db: AsyncSession = Depends(get_db)):
+    """Export the global rating (for the selected period) as an .xlsx file.
+
+    Mirrors the aggregation used by the WebApp leaderboard endpoint
+    (api.v1.webapp.leaderboard): points = SUM(score) * 2, tiebreak by total
+    time ascending.
+    """
+    from api.v1.webapp import _period_since
+
+    total_points = (func.sum(QuizAttempt.score) * 2).label("points")
+    total_time = func.sum(QuizAttempt.time_taken_seconds).label("time_taken")
+    attempts_n = func.count(QuizAttempt.id).label("attempts_n")
+
+    stmt = (
+        select(
+            TelegramUser.first_name,
+            TelegramUser.last_name,
+            TelegramUser.username,
+            TelegramUser.telegram_id,
+            TelegramUser.phone,
+            total_points,
+            total_time,
+            attempts_n,
+        )
+        .join(QuizAttempt, QuizAttempt.user_id == TelegramUser.id)
+        .group_by(TelegramUser.id)
+        .order_by(desc("points"), "time_taken")
+    )
+
+    since = _period_since(period)
+    if since is not None:
+        stmt = stmt.where(QuizAttempt.createdAt >= since)
+
+    rows = (await db.execute(stmt)).all()
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Reyting"
+
+    headers = [
+        "O'rin", "Ism Familya", "Username", "Telegram ID", "Telefon",
+        "Ballar", "Urinishlar", "Umumiy vaqt (mm:ss)",
+    ]
+    ws.append(headers)
+
+    header_fill = PatternFill(start_color="6C63F6", end_color="6C63F6", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for i, r in enumerate(rows, start=1):
+        full = " ".join(filter(None, [r.first_name, r.last_name])) or ""
+        secs = int(r.time_taken or 0)
+        mmss = f"{secs // 60:02d}:{secs % 60:02d}"
+        ws.append([
+            i,
+            full,
+            r.username or "",
+            r.telegram_id,
+            r.phone or "",
+            int(r.points or 0),
+            int(r.attempts_n or 0),
+            mmss,
+        ])
+
+    widths = [6, 28, 20, 16, 18, 12, 12, 18]
+    for col, w in enumerate(widths, start=1):
+        ws.column_dimensions[chr(64 + col)].width = w
+
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    label = _PERIOD_LABELS.get(period, "reyting")
+    filename = f"reyting_{label}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/builder", response_class=HTMLResponse)
@@ -118,13 +221,15 @@ async def builder_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
     saved = 0
     for i, q in enumerate(questions_in, start=1):
         text = (q.get("text") or "").strip()
+        image_url = (q.get("image_url") or "").strip()
         a = (q.get("option_a") or "").strip()
         b = (q.get("option_b") or "").strip()
         c = (q.get("option_c") or "").strip()
         d = (q.get("option_d") or "").strip()
         correct = (q.get("correct") or "A").strip().upper()
 
-        if not (text and a and b and c and d):
+        # A question needs text OR an image, plus all four options.
+        if not ((text or image_url) and a and b and c and d):
             continue
         if correct not in ("A", "B", "C", "D"):
             correct = "A"
@@ -132,7 +237,8 @@ async def builder_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
         db.add(Question(
             quiz_id=quiz.id,
             order=i,
-            text=text,
+            text=text or None,
+            image_url=image_url or None,
             option_a=a, option_b=b, option_c=c, option_d=d,
             correct_option=CorrectOption(correct),
             explanation=(q.get("explanation") or "").strip() or None,
@@ -261,6 +367,31 @@ async def books_delete(book_id: int, db: AsyncSession = Depends(get_db)):
     return {"ok": True}
 
 
+# ═══ Question image upload ═════════════════════════════════════════
+
+QUESTION_IMAGES_DIR = MEDIA_ROOT / QUESTION_IMAGES_DIR_NAME
+
+
+@router.post("/upload-image")
+async def upload_image(file: UploadFile = File(...)):
+    """Upload a question image and return its public URL under /media."""
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_IMAGE_EXT:
+        raise HTTPException(400, f"Rasm turi qo'llab-quvvatlanmaydi: {ext or 'nomaʼlum'}")
+
+    data = await file.read()
+    if len(data) > MAX_IMAGE_SIZE:
+        raise HTTPException(400, "Rasm juda katta (maks. 5 MB)")
+    if not data:
+        raise HTTPException(400, "Rasm bo'sh")
+
+    QUESTION_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    stored = f"{QUESTION_IMAGES_DIR_NAME}/{uuid.uuid4().hex}{ext}"
+    (MEDIA_ROOT / stored).write_bytes(data)
+
+    return {"ok": True, "url": f"/media/{stored}"}
+
+
 # ═══ Contests (yutuqli test) ════════════════════════════════════════
 
 def _parse_dt(value: str | None) -> datetime | None:
@@ -343,7 +474,8 @@ async def contest_edit_page(contest_id: int, request: Request, db: AsyncSession 
         "is_active": contest.is_active,
         "questions": [
             {
-                "text": q.text,
+                "text": q.text or "",
+                "image_url": q.image_url or "",
                 "option_a": q.option_a,
                 "option_b": q.option_b,
                 "option_c": q.option_c,
@@ -382,17 +514,19 @@ async def contest_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
     valid_questions = []
     for q in questions_in:
         text = (q.get("text") or "").strip()
+        image_url = (q.get("image_url") or "").strip()
         a = (q.get("option_a") or "").strip()
         b = (q.get("option_b") or "").strip()
         c_ = (q.get("option_c") or "").strip()
         d = (q.get("option_d") or "").strip()
         correct = (q.get("correct") or "A").strip().upper()
-        if not (text and a and b and c_ and d):
+        if not ((text or image_url) and a and b and c_ and d):
             continue
         if correct not in ("A", "B", "C", "D"):
             correct = "A"
         valid_questions.append({
-            "text": text, "option_a": a, "option_b": b, "option_c": c_, "option_d": d,
+            "text": text or None, "image_url": image_url or None,
+            "option_a": a, "option_b": b, "option_c": c_, "option_d": d,
             "correct": correct, "explanation": (q.get("explanation") or "").strip() or None,
         })
 
@@ -439,6 +573,7 @@ async def contest_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
             contest_id=contest.id,
             order=i,
             text=q["text"],
+            image_url=q["image_url"],
             option_a=q["option_a"], option_b=q["option_b"],
             option_c=q["option_c"], option_d=q["option_d"],
             correct_option=CorrectOption(q["correct"]),

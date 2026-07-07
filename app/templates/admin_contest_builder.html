@@ -52,6 +52,13 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,san
 .q-del{position:absolute;top:20px;right:20px;background:transparent;border:none;color:#aab0c0;cursor:pointer;padding:6px;border-radius:6px}
 .q-del:hover{background:rgba(220,58,58,.12);color:#dc2626}
 .q-options{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.q-img{margin-bottom:10px}
+.q-img-btn{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;background:#f7f8fc;border:1px dashed rgba(0,0,0,.18);border-radius:9px;color:#6b7280;font-size:.82rem;font-weight:600;cursor:pointer}
+.q-img-btn:hover{border-color:#6c63f6;color:#6c63f6}
+.q-img-preview{position:relative;display:inline-block;max-width:260px}
+.q-img-preview img{max-width:100%;max-height:180px;border-radius:9px;border:1px solid rgba(0,0,0,.1);display:block}
+.q-img-del{position:absolute;top:6px;right:6px;width:26px;height:26px;border:none;border-radius:7px;background:rgba(16,24,40,.7);color:#fff;cursor:pointer}
+.q-img-del:hover{background:#dc2626}
 .q-opt{display:flex;align-items:center;gap:8px;background:#f7f8fc;border:1px solid rgba(0,0,0,.08);border-radius:9px;padding:2px 12px 2px 6px}
 .q-opt.is-correct{border-color:#22c98a;background:rgba(34,197,138,.08)}
 .q-opt-letter{background:rgba(0,0,0,.06);color:#6b7280;font-weight:700;font-size:.72rem;width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center}
@@ -222,11 +229,32 @@ if (initial) {
 }
 
 function addQ(prefill){
-    questions.push(prefill || {text:'', option_a:'', option_b:'', option_c:'', option_d:'', correct:'A', explanation:''});
+    questions.push(prefill || {text:'', image_url:'', option_a:'', option_b:'', option_c:'', option_d:'', correct:'A', explanation:''});
     render();
 }
 
 function delQ(i){ questions.splice(i,1); render(); }
+
+async function uploadImage(i, input){
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    input.disabled = true;
+    try {
+        const r = await fetch('/admin-tools/upload-image', { method:'POST', body: fd });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || 'Rasm yuklanmadi');
+        questions[i].image_url = data.url;
+        render();
+        toast('Rasm yuklandi', 'ok');
+    } catch (e) {
+        toast(e.message, 'err');
+        input.disabled = false;
+    }
+}
+
+function removeImage(i){ questions[i].image_url = ''; render(); }
 
 function render(){
     const list = document.getElementById('q-list');
@@ -235,7 +263,20 @@ function render(){
             <div class="q-num">${i+1}</div>
             <button class="q-del" onclick="delQ(${i})"><i class="fa fa-trash"></i></button>
             <div class="q-content">
-                <textarea class="textarea" placeholder="Savol matni" data-i="${i}" data-k="text">${escapeHtml(q.text)}</textarea>
+                <div class="q-img">
+                    ${q.image_url ? `
+                        <div class="q-img-preview">
+                            <img src="${escapeAttr(q.image_url)}" alt="savol rasmi">
+                            <button type="button" class="q-img-del" onclick="removeImage(${i})" title="Rasmni o'chirish"><i class="fa fa-xmark"></i></button>
+                        </div>
+                    ` : `
+                        <label class="q-img-btn">
+                            <i class="fa fa-image"></i> Rasm yuklash
+                            <input type="file" accept="image/*" style="display:none" onchange="uploadImage(${i}, this)">
+                        </label>
+                    `}
+                </div>
+                <textarea class="textarea" placeholder="Savol matni (rasm bo'lsa ixtiyoriy)" data-i="${i}" data-k="text">${escapeHtml(q.text)}</textarea>
                 <div class="q-options">
                     ${['A','B','C','D'].map(L => `
                         <label class="q-opt ${q.correct===L?'is-correct':''}">

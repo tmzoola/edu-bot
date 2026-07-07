@@ -12,6 +12,7 @@
 .q-card{background:#fff;border-radius:16px;padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
 .q-num{display:inline-block;background:rgba(245,158,11,.15);color:#b45309;padding:3px 10px;border-radius:99px;font-size:.72rem;font-weight:800;margin-bottom:10px}
 .q-text{font-size:.95rem;font-weight:700;color:#111;line-height:1.5;margin-bottom:14px}
+.q-img{display:block;max-width:100%;max-height:240px;border-radius:12px;margin-bottom:12px}
 .opts{display:flex;flex-direction:column;gap:8px}
 .opt{background:#F9FAFB;border:2px solid transparent;border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:.12s}
 .opt.active{background:rgba(34,197,138,.1);border-color:var(--green)}
@@ -71,7 +72,8 @@ function render(){
         </div>
         <div class="q-card">
             <div class="q-num">Savol ${idx+1}</div>
-            <div class="q-text">${esc(q.text)}</div>
+            ${q.image_url ? `<img class="q-img" src="${esc(q.image_url)}" alt="savol rasmi">` : ''}
+            ${q.text ? `<div class="q-text">${esc(q.text)}</div>` : ''}
             <div class="opts">
                 ${['A','B','C','D'].map(L => `
                     <div class="opt ${sel===L?'active':''}" onclick="pick('${L}')">

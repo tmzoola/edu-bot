@@ -22,6 +22,7 @@ body{padding-bottom:0}
 .q-content{padding:24px 20px 100px}
 .q-num{font-size:.75rem;color:var(--muted);font-weight:600;margin-bottom:8px;letter-spacing:.02em}
 .q-text{font-size:1.15rem;font-weight:700;line-height:1.4;color:#111;margin-bottom:24px;animation:fadeUp .25s ease}
+.q-img{display:block;max-width:100%;max-height:280px;border-radius:14px;margin-bottom:18px;animation:fadeUp .25s ease}
 
 .opts{display:flex;flex-direction:column;gap:10px;animation:fadeUp .28s ease}
 .opt{background:#fff;border:2px solid transparent;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:.15s;box-shadow:var(--shadow)}
@@ -104,7 +105,8 @@ function render(){
     const c = document.getElementById('q-content');
     c.innerHTML = `
         <div class="q-num">Savol ${idx+1} / ${quiz.questions.length}</div>
-        <div class="q-text">${esc(q.text)}</div>
+        ${q.image_url ? `<img class="q-img" src="${esc(q.image_url)}" alt="savol rasmi">` : ''}
+        ${q.text ? `<div class="q-text">${esc(q.text)}</div>` : ''}
         <div class="opts">
             ${['A','B','C','D'].map(L => `
                 <div class="opt ${answers[q.id]===L?'sel':''}" data-l="${L}">

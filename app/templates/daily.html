@@ -36,6 +36,8 @@
 .progress-fill{background:#EA580C;height:100%;border-radius:4px;transition:width .3s}
 .q-num{font-size:.75rem;color:var(--muted);font-weight:600;margin:8px 0}
 .q-text{font-size:1.15rem;font-weight:700;line-height:1.4;color:#111;margin-bottom:20px;animation:fadeUp .25s ease}
+.q-img{display:block;max-width:100%;max-height:280px;border-radius:14px;margin-bottom:16px;animation:fadeUp .25s ease}
+.rev-img{display:block;max-width:100%;max-height:180px;border-radius:10px;margin:8px 0}
 .opts{display:flex;flex-direction:column;gap:10px;animation:fadeUp .28s ease}
 .opt{background:#fff;border:2px solid transparent;border-radius:14px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:.15s;box-shadow:var(--shadow)}
 .opt:active{transform:scale(.99)}
@@ -209,7 +211,8 @@ function renderQ(){
             <div class="progress-bar"><div class="progress-fill" style="width:${((idx+1)/D.questions.length)*100}%"></div></div>
         </div>
         <div class="q-num">Savol ${idx+1}</div>
-        <div class="q-text">${esc(q.text)}</div>
+        ${q.image_url ? `<img class="q-img" src="${esc(q.image_url)}" alt="savol rasmi">` : ''}
+        ${q.text ? `<div class="q-text">${esc(q.text)}</div>` : ''}
         <div class="opts">
             ${['A','B','C','D'].map(L => `
                 <div class="opt ${answers[q.id]===L?'sel':''}" data-l="${L}">
@@ -291,7 +294,8 @@ function renderResult(res){
         const corrTxt = `${ca}) ${esc(q[L[ca]])}`;
         return `
         <div class="rev">
-            <div class="rev-q"><span class="rev-badge ${q.is_correct?'ok':'bad'}">${q.is_correct?'✓':'✕'}</span>${i+1}. ${esc(q.text)}</div>
+            <div class="rev-q"><span class="rev-badge ${q.is_correct?'ok':'bad'}">${q.is_correct?'✓':'✕'}</span>${i+1}. ${esc(q.text || '[rasm]')}</div>
+            ${q.image_url ? `<img class="rev-img" src="${esc(q.image_url)}" alt="savol rasmi">` : ''}
             <div class="rev-line">Siz: <span class="a ${q.is_correct?'ok':'bad'}">${userTxt}</span></div>
             ${!q.is_correct ? `<div class="rev-line">To'g'ri: <span class="a ok">${corrTxt}</span></div>` : ''}
             ${q.explanation ? `<div class="rev-exp">${esc(q.explanation)}</div>` : ''}

@@ -67,6 +67,7 @@ body{background:linear-gradient(180deg,#EEF3EA 0%,#F5F8F2 50%,#EEF3EA 100%);padd
 .qr.wrong .qr-status{color:#c0392b}
 .qr.skip .qr-status{color:#888}
 .qr-text{font-size:.95rem;font-weight:600;color:#111;line-height:1.4;margin-bottom:12px}
+.qr-img{display:block;max-width:100%;max-height:200px;border-radius:10px;margin-bottom:12px}
 .qr-opts{display:flex;flex-direction:column;gap:6px}
 .qr-opt{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;background:#F8F9F7;font-size:.86rem;color:#333;line-height:1.35}
 .qr-opt.is-correct{background:#E4F3EB;color:#1a7a3f;font-weight:600}
@@ -219,7 +220,8 @@ const ATTEMPT_ID = {{ attempt_id }};
                     <div class="qr-num">Savol ${q.order || q.id}</div>
                     <div class="qr-status">${statusHtml}</div>
                 </div>
-                <div class="qr-text">${esc(q.text)}</div>
+                ${q.image_url ? `<img class="qr-img" src="${esc(q.image_url)}" alt="savol rasmi">` : ''}
+                ${q.text ? `<div class="qr-text">${esc(q.text)}</div>` : ''}
                 <div class="qr-opts">
                     ${['A','B','C','D'].map(L => {
                         const isCorrect = q.correct_answer === L;

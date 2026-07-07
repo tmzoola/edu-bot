@@ -7,7 +7,7 @@ from admin import setup_admin
 from api.v1.admin_tools import router as admin_tools_router
 from api.v1.webapp import api as webapp_api
 from api.v1.webapp import pages as webapp_pages
-from core.config import settings
+from core.config import MEDIA_ROOT, settings
 from core.error_handlers import (
     app_exception_handler,
     http_exception_handler,
@@ -19,6 +19,7 @@ from db.session import session_factory
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from logging_config import setup_logging
 from sqlalchemy import text
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -135,6 +136,10 @@ async def https_proxy_middleware(request: Request, call_next):
 app.include_router(webapp_pages)
 app.include_router(webapp_api)
 app.include_router(admin_tools_router)
+
+# User-uploaded media (book files served via endpoint; question images via /media).
+MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=str(MEDIA_ROOT)), name="media")
 
 
 @app.get("/health")

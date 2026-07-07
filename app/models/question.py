@@ -22,7 +22,8 @@ class Question(Base):
     quiz_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("quizzes.id", ondelete="CASCADE")
     )
-    text: Mapped[str] = mapped_column(Text)
+    text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     option_a: Mapped[str] = mapped_column(String(512))
     option_b: Mapped[str] = mapped_column(String(512))
     option_c: Mapped[str] = mapped_column(String(512))
@@ -36,4 +37,4 @@ class Question(Base):
     quiz: Mapped["Quiz"] = relationship("Quiz", back_populates="questions")
 
     def __str__(self) -> str:
-        return self.text[:60]
+        return (self.text or "[rasm]")[:60]

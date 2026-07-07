@@ -14,6 +14,11 @@ ALLOWED_BOOK_EXT = {
 }
 MAX_BOOK_SIZE = 100 * 1024 * 1024  # 100 MB
 
+# Question image upload constraints (admin builder / contest builder).
+QUESTION_IMAGES_DIR_NAME = "questions"
+ALLOWED_IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+MAX_IMAGE_SIZE = 5 * 1024 * 1024  # 5 MB
+
 # Fixed book categories shown in the WebApp. Admin can still upload with
 # custom categories for subjects not in this list — those simply won't appear
 # as a default chip but are stored on the Book row unchanged.

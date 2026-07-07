@@ -448,6 +448,7 @@ async def get_quiz(quiz_id: int, db: AsyncSession = Depends(get_db)):
             {
                 "id": q.id,
                 "text": q.text,
+                "image_url": q.image_url,
                 "option_a": q.option_a,
                 "option_b": q.option_b,
                 "option_c": q.option_c,
@@ -536,6 +537,7 @@ async def get_results(attempt_id: int, db: AsyncSession = Depends(get_db)):
             "id": q.id,
             "order": q.order,
             "text": q.text,
+            "image_url": q.image_url,
             "option_a": q.option_a,
             "option_b": q.option_b,
             "option_c": q.option_c,
@@ -993,6 +995,7 @@ async def get_daily(
             {
                 "id": q.id,
                 "text": q.text,
+                "image_url": q.image_url,
                 "option_a": q.option_a,
                 "option_b": q.option_b,
                 "option_c": q.option_c,
@@ -1055,6 +1058,7 @@ async def submit_daily(
         review.append({
             "id": q.id,
             "text": q.text,
+            "image_url": q.image_url,
             "option_a": q.option_a,
             "option_b": q.option_b,
             "option_c": q.option_c,
@@ -1246,6 +1250,7 @@ async def get_contest_questions(
             {
                 "id": q.id,
                 "text": q.text,
+                "image_url": q.image_url,
                 "option_a": q.option_a,
                 "option_b": q.option_b,
                 "option_c": q.option_c,
