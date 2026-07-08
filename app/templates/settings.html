@@ -37,8 +37,8 @@
 
   <div class="mb">
     <div class="form-lbl">Telefon raqam</div>
-    <input id="phone" class="form-inp" placeholder="+998XXXXXXXXX" inputmode="tel" maxlength="20" autocomplete="tel">
-    <div class="form-hint">Masalan: <b>+998901234567</b></div>
+    <input id="phone" class="form-inp" placeholder="+998XXXXXXXXX" readonly>
+    <div class="form-hint">Raqamni o'zgartirish uchun botga /start yuboring.</div>
   </div>
 
   <button id="save" class="btn btn-primary">Saqlash</button>
@@ -62,9 +62,7 @@
 
 document.getElementById('save').addEventListener('click', async () => {
     const full_name = document.getElementById('full_name').value.trim();
-    const phone = document.getElementById('phone').value.trim();
     if (full_name.length < 2) { showMsg('err', "Ism Familyani kiriting"); return; }
-    if (!phone) { showMsg('err', "Telefon raqamni kiriting"); return; }
 
     const btn = document.getElementById('save');
     btn.disabled = true; btn.textContent = 'Saqlanmoqda…';
@@ -73,15 +71,14 @@ document.getElementById('save').addEventListener('click', async () => {
         const r = await fetch('/api/v1/webapp/me/update', {
             method: 'POST',
             headers: Object.assign({'Content-Type':'application/json'}, MK.authHeaders()),
-            body: JSON.stringify({ full_name, phone })
+            body: JSON.stringify({ full_name })
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.detail || 'Xatolik');
-        document.getElementById('phone').value = d.phone || '';
         // update cache
         try {
             const u = JSON.parse(sessionStorage.getItem('mk_user') || '{}');
-            u.first_name = d.first_name; u.last_name = d.last_name; u.phone = d.phone;
+            u.first_name = d.first_name; u.last_name = d.last_name;
             sessionStorage.setItem('mk_user', JSON.stringify(u));
         } catch(e){}
         MK.haptic('success');
