@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import lazyload, selectinload
 
 from core.config import (
     ALLOWED_BOOK_EXT,
@@ -165,7 +165,7 @@ async def builder_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
         module_id = module.id
     elif module_id:
         module_id = int(module_id)
-        if not await db.get(Module, module_id):
+        if not (await db.execute(select(Module.id).where(Module.id == module_id))).scalar_one_or_none():
             raise HTTPException(400, "Modul topilmadi")
     else:
         module_id = None
@@ -189,7 +189,11 @@ async def builder_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
         topic_id = topic.id
     else:
         topic_id = int(topic_id)
-        existing = await db.get(Topic, topic_id)
+        existing = (
+            await db.execute(
+                select(Topic).where(Topic.id == topic_id).options(lazyload(Topic.quizzes))
+            )
+        ).scalar_one_or_none()
         if not existing:
             raise HTTPException(400, "Mavzu topilmadi")
         # If admin chose a module and topic wasn't linked, link it
