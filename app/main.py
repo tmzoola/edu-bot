@@ -1,7 +1,9 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import uvicorn
 from admin import setup_admin
@@ -30,6 +32,31 @@ from starlette.responses import JSONResponse
 logger = logging.getLogger(__name__)
 
 
+_TZ = ZoneInfo("Asia/Tashkent")
+_REENGAGEMENT_HOUR = 10  # 10:00 Tashkent time
+
+
+async def _reengagement_loop() -> None:
+    """Fire daily re-engagement notifications at 10:00 Tashkent time."""
+    from services.notifications import send_reengagement_notifications
+
+    while True:
+        now = datetime.now(_TZ)
+        # Seconds until next 10:00
+        next_run = now.replace(hour=_REENGAGEMENT_HOUR, minute=0, second=0, microsecond=0)
+        if now >= next_run:
+            # Already past 10:00 today — schedule for tomorrow
+            next_run = next_run.replace(day=next_run.day + 1)
+        wait = (next_run - now).total_seconds()
+        logger.info("Reengagement: next run in %.0f s (%s)", wait, next_run.isoformat())
+        await asyncio.sleep(wait)
+        try:
+            stats = await send_reengagement_notifications(settings.WEBAPP_URL)
+            logger.info("Reengagement done: %s", stats)
+        except Exception:
+            logger.exception("Reengagement notification error")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
@@ -41,15 +68,20 @@ async def lifespan(app: FastAPI):
     polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=True))
     logger.info("✅ Bot polling started")
 
+    reengagement_task = asyncio.create_task(_reengagement_loop())
+    logger.info("✅ Reengagement scheduler started")
+
     yield
 
     # Graceful shutdown
     logger.info("🔴 Shutting down...")
+    reengagement_task.cancel()
     polling_task.cancel()
-    try:
-        await polling_task
-    except asyncio.CancelledError:
-        pass
+    for task in (polling_task, reengagement_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     await bot.session.close()
     logger.info("Bot stopped.")
 

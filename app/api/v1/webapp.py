@@ -22,6 +22,7 @@ from models.landing import LandingContent
 from models.module import Module
 from models.question import Question
 from models.quiz import Quiz
+from models.shop import BookOrder, ShopBook, ShopSettings
 from models.telegram_user import TelegramUser
 from models.topic import Topic
 from sqlalchemy import desc, func, select
@@ -134,6 +135,11 @@ async def books_page(request: Request):
     return templates.TemplateResponse("books.html", {"request": request})
 
 
+@pages.get("/my-orders", response_class=HTMLResponse)
+async def my_orders_page(request: Request):
+    return templates.TemplateResponse("my_orders.html", {"request": request})
+
+
 @pages.get("/books/{book_id}/file")
 async def book_file(book_id: int, db: AsyncSession = Depends(get_db)):
     book = await db.get(Book, book_id)
@@ -176,6 +182,7 @@ async def _get_or_create_tg_user(db: AsyncSession, tg_data: dict[str, Any]) -> T
     tg_id = int(tg_data["id"])
     result = await db.execute(select(TelegramUser).where(TelegramUser.telegram_id == tg_id))
     user = result.scalar_one_or_none()
+    now = datetime.now(TASHKENT_TZ)
     if user:
         # Keep Telegram-managed fields in sync, but DO NOT overwrite the
         # user's name — they can edit it in WebApp settings, and re-syncing
@@ -186,6 +193,9 @@ async def _get_or_create_tg_user(db: AsyncSession, tg_data: dict[str, Any]) -> T
             user.first_name = tg_data.get("first_name")
         if not user.last_name:
             user.last_name = tg_data.get("last_name")
+        # Refresh at most once per hour to avoid excessive writes.
+        if not user.last_active_at or (now - user.last_active_at).total_seconds() > 3600:
+            user.last_active_at = now
         return user
     user = TelegramUser(
         telegram_id=tg_id,
@@ -193,6 +203,7 @@ async def _get_or_create_tg_user(db: AsyncSession, tg_data: dict[str, Any]) -> T
         last_name=tg_data.get("last_name"),
         username=tg_data.get("username"),
         language_code=tg_data.get("language_code"),
+        last_active_at=now,
     )
     db.add(user)
     await db.flush()
@@ -1419,3 +1430,48 @@ async def admin_dashboard_stats(db: AsyncSession = Depends(get_db)):
             for a in recent
         ],
     }
+
+
+# ═══ My orders ═══════════════════════════════════════════════════════════
+
+_ORDER_STATUS_LABELS = {
+    "pending": "To'lov kutilmoqda",
+    "confirmed": "To'lov tasdiqlandi",
+    "processing": "Manzil qabul qilindi",
+    "shipped": "Yo'lda",
+}
+
+
+@api.get("/my-orders")
+async def my_orders(
+    x_init_data: str | None = Header(None),
+    x_tg_id: int | None = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
+    user = await _resolve_user(db, x_init_data, x_tg_id)
+    if not user:
+        raise HTTPException(401, "Autentifikatsiya talab etiladi")
+
+    rows = (
+        await db.execute(
+            select(BookOrder)
+            .where(BookOrder.user_id == user.id)
+            .options(selectinload(BookOrder.book))
+            .order_by(BookOrder.createdAt.desc())
+        )
+    ).scalars().all()
+
+    return [
+        {
+            "id": o.id,
+            "book_title": o.book.title if o.book else "—",
+            "book_price": o.book.price if o.book else 0,
+            "status": o.status.value,
+            "status_label": _ORDER_STATUS_LABELS.get(o.status.value, o.status.value),
+            "delivery_name": o.delivery_name,
+            "delivery_phone": o.delivery_phone,
+            "delivery_address": o.delivery_address,
+            "created_at": o.createdAt.strftime("%d.%m.%Y %H:%M") if o.createdAt else "—",
+        }
+        for o in rows
+    ]

@@ -1,10 +1,13 @@
 import asyncio
 import io
+import logging
 import re
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -30,6 +33,7 @@ from models.contest import Contest, ContestAttempt, ContestQuestion
 from models.module import Module
 from models.question import CorrectOption, Question
 from models.quiz import Quiz
+from models.shop import BookOrder, OrderStatus, ShopBook, ShopSettings
 from models.telegram_user import TelegramUser
 from models.topic import Topic
 from services.notifications import broadcast, notify_new_contest, notify_new_quiz
@@ -895,3 +899,126 @@ def _parse_bulk(raw: str) -> list[dict]:
             out.append(q)
 
     return out
+
+
+# ═══ Shop / Orders management ══════════════════════════════════════════════
+
+@router.get("/orders", response_class=HTMLResponse)
+async def orders_page(request: Request):
+    return templates.TemplateResponse("admin_orders.html", {"request": request})
+
+
+@router.get("/orders/list")
+async def orders_list(db: AsyncSession = Depends(get_db)):
+    rows = (
+        await db.execute(
+            select(BookOrder)
+            .options(selectinload(BookOrder.user), selectinload(BookOrder.book))
+            .order_by(BookOrder.createdAt.desc())
+        )
+    ).scalars().all()
+    return [
+        {
+            "id": o.id,
+            "status": o.status.value,
+            "user_name": o.user.full_name if o.user else "—",
+            "user_phone": o.user.phone if o.user else None,
+            "user_username": o.user.username if o.user else None,
+            "user_telegram_id": o.user.telegram_id if o.user else None,
+            "book_title": o.book.title if o.book else "—",
+            "book_price": o.book.price if o.book else 0,
+            "delivery_name": o.delivery_name,
+            "delivery_phone": o.delivery_phone,
+            "delivery_address": o.delivery_address,
+            "admin_note": o.admin_note,
+            "created_at": o.createdAt.isoformat() if o.createdAt else None,
+        }
+        for o in rows
+    ]
+
+
+async def _notify_order_user(telegram_id: int, order_id: int, text: str) -> None:
+    """Send a bot message to the order's user and set FSM state if needed."""
+    from aiogram.fsm.context import FSMContext
+    from aiogram.fsm.storage.base import StorageKey
+    from bot.router import BookDelivery
+    from bot.setup import bot, dp
+
+    await bot.send_message(telegram_id, text, parse_mode="HTML")
+
+    # Put the user into the delivery-info FSM flow
+    key = StorageKey(bot_id=bot.id, chat_id=telegram_id, user_id=telegram_id)
+    state = FSMContext(storage=dp.storage, key=key)
+    await state.set_state(BookDelivery.name)
+    await state.update_data(order_id=order_id)
+
+
+@router.post("/orders/{order_id}/confirm")
+async def order_confirm(order_id: int, payload: dict[str, Any], db: AsyncSession = Depends(get_db)):
+    order = (
+        await db.execute(
+            select(BookOrder)
+            .where(BookOrder.id == order_id)
+            .options(selectinload(BookOrder.user), selectinload(BookOrder.book))
+        )
+    ).scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "Buyurtma topilmadi")
+    if order.status != OrderStatus.PENDING:
+        raise HTTPException(400, f"Holat allaqachon: {order.status.value}")
+
+    order.status = OrderStatus.CONFIRMED
+    if payload.get("note"):
+        order.admin_note = payload["note"]
+    await db.commit()
+
+    # Notify user via bot
+    book_title = order.book.title if order.book else "kitob"
+    try:
+        await _notify_order_user(
+            order.user.telegram_id,
+            order_id,
+            f"✅ <b>To'lovingiz qabul qilindi!</b>\n\n"
+            f"📚 Kitob: <b>{book_title}</b>\n\n"
+            "Yetkazib berish uchun quyidagi ma'lumotlarni yuboring:\n\n"
+            "👤 <b>Ism Familyangizni</b> kiriting:",
+        )
+    except Exception:
+        logger.exception("Failed to notify user %s after payment confirm", order.user.telegram_id)
+
+    return {"ok": True}
+
+
+@router.post("/orders/{order_id}/ship")
+async def order_ship(order_id: int, payload: dict[str, Any], db: AsyncSession = Depends(get_db)):
+    order = (
+        await db.execute(
+            select(BookOrder)
+            .where(BookOrder.id == order_id)
+            .options(selectinload(BookOrder.user), selectinload(BookOrder.book))
+        )
+    ).scalar_one_or_none()
+    if not order:
+        raise HTTPException(404, "Buyurtma topilmadi")
+    if order.status != OrderStatus.PROCESSING:
+        raise HTTPException(400, f"Holat noto'g'ri: {order.status.value}")
+
+    order.status = OrderStatus.SHIPPED
+    if payload.get("note"):
+        order.admin_note = payload["note"]
+    await db.commit()
+
+    book_title = order.book.title if order.book else "Kitob"
+    try:
+        from bot.setup import bot
+        await bot.send_message(
+            order.user.telegram_id,
+            f"📦 <b>{book_title} jo'natildi!</b>\n\n"
+            "Kitobingiz tez kunda sizga yetkaziladi. 🚚\n"
+            "Savollar bo'lsa adminga murojaat qiling.",
+            parse_mode="HTML",
+        )
+    except Exception:
+        logger.exception("Failed to notify user %s after ship", order.user.telegram_id)
+
+    return {"ok": True}

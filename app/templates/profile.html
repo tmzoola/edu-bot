@@ -64,6 +64,11 @@
         </div>
     `;
 
+    html += `<a href="/webapp/my-orders" style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#fff;border-radius:14px;box-shadow:var(--shadow);margin-bottom:12px;color:#111;text-decoration:none;font-weight:600;font-size:.9rem">
+        <span style="font-size:1.3rem">📦</span> Mening buyurtmalarim
+        <span style="margin-left:auto;color:var(--muted)">→</span>
+    </a>`;
+
     if (d.recent.length) {
         html += '<div class="section-t">SO\'NGGI URINISHLAR</div>';
         html += d.recent.map(a => `

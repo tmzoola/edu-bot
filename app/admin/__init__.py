@@ -7,6 +7,7 @@ from admin.views.landing import LandingContentAdminView
 from admin.views.module import ModuleAdminView
 from admin.views.question import QuestionAdminView
 from admin.views.quiz import QuizAdminView
+from admin.views.shop import BookOrderView, ShopBookView, ShopSettingsView
 from admin.views.telegram_user import TelegramUserAdminView
 from admin.views.topic import TopicAdminView
 from db.session import engine
@@ -16,6 +17,7 @@ from models.landing import LandingContent
 from models.module import Module
 from models.question import Question
 from models.quiz import Quiz
+from models.shop import BookOrder, ShopBook, ShopSettings
 from models.telegram_user import TelegramUser
 from models.topic import Topic
 from starlette_admin.contrib.sqla import Admin
@@ -78,5 +80,14 @@ def setup_admin(app: FastAPI) -> None:
     admin.add_view(BookAdminView(Book, identity="kitob"))
     admin.add_view(TelegramUserAdminView(TelegramUser, identity="foydalanuvchi"))
     admin.add_view(LandingContentAdminView(LandingContent, identity="bosh-sahifa-matni"))
+    admin.add_view(ShopSettingsView(ShopSettings, identity="dokon-sozlama"))
+    admin.add_view(ShopBookView(ShopBook, identity="dokon-kitob"))
+    admin.add_view(BookOrderView(BookOrder, identity="buyurtma"))
+
+    admin.add_view(Link(
+        label="Buyurtmalar boshqaruvi",
+        icon="fa fa-box-open",
+        url="/admin-tools/orders",
+    ))
 
     admin.mount_to(app)

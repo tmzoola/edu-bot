@@ -1,5 +1,8 @@
 import asyncio
 import logging
+import random
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
@@ -7,6 +10,38 @@ from sqlalchemy import select
 
 from db.session import session_factory
 from models.telegram_user import TelegramUser
+
+_TZ = ZoneInfo("Asia/Tashkent")
+
+_REENGAGEMENT_TEMPLATES = [
+    (
+        "Assalomu alaykum, {name}! 🌸\n\n"
+        "Bir muddat ko'rinmay qoldingiz — sog'indik.\n"
+        "Siz ketgandan beri yangi testlar qo'shildi.\n\n"
+        "2 daqiqa, bitta test bilan qaytamizmi? 📚"
+    ),
+    (
+        "Salom, {name}! 👋\n\n"
+        "Attestatsiyanizga tayyorgarlik davom etayaptimi?\n"
+        "Yangi mavzular va testlar qo'shildi — bir ko'z tashlang! 🎯"
+    ),
+    (
+        "{name}, sog'indik! 🧡\n\n"
+        "Bir necha kun ko'rinmadingiz.\n"
+        "Bilimlaringizni sinab ko'rmaysizmi?\n\n"
+        "Atigi 2 daqiqa — katta natija! 🚀"
+    ),
+    (
+        "Assalomu alaykum, {name}! ✨\n\n"
+        "O'qishdan ozgina dam oldingizmi? Davom etish vaqti!\n"
+        "Yangi testlar sizni kutmoqda 📖"
+    ),
+    (
+        "{name}, xayrli kun! ☀️\n\n"
+        "Attestatsiyagacha vaqt o'tib ketmoqda.\n"
+        "Bugun bir test yechsangiz — ertaga osonroq bo'ladi! 💪"
+    ),
+]
 
 logger = logging.getLogger(__name__)
 
@@ -111,3 +146,63 @@ async def notify_new_quiz(quiz_id: int, quiz_title: str, webapp_base: str) -> di
         ]]
     )
     return await broadcast(text, reply_markup=kb)
+
+
+async def _inactive_users(days: int = 3) -> list[TelegramUser]:
+    """Return registered, non-blocked users inactive for `days` days."""
+    cutoff = datetime.now(_TZ) - timedelta(days=days)
+    async with session_factory() as session:
+        rows = await session.execute(
+            select(TelegramUser).where(
+                TelegramUser.is_blocked == False,  # noqa: E712
+                TelegramUser.is_banned == False,  # noqa: E712
+                TelegramUser.phone.is_not(None),
+                TelegramUser.last_active_at.is_not(None),
+                TelegramUser.last_active_at < cutoff,
+            )
+        )
+        return list(rows.scalars().all())
+
+
+async def send_reengagement_notifications(webapp_base: str) -> dict[str, int]:
+    """Send personalised re-engagement messages to users inactive 3+ days."""
+    from bot.setup import bot  # local import — avoid startup cycles
+
+    users = await _inactive_users(days=3)
+    sent = failed = blocked = 0
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[[
+            InlineKeyboardButton(
+                text="📚 Testlarni ochish",
+                web_app=WebAppInfo(url=f"{webapp_base}/webapp/modules"),
+            )
+        ]]
+    )
+
+    for user in users:
+        name = user.last_name or user.first_name or user.username or "Foydalanuvchi"
+        text = random.choice(_REENGAGEMENT_TEMPLATES).format(name=name)
+        try:
+            await bot.send_message(user.telegram_id, text, reply_markup=kb)
+            sent += 1
+        except TelegramForbiddenError:
+            blocked += 1
+            await _mark_blocked(user.telegram_id)
+        except TelegramRetryAfter as e:
+            await asyncio.sleep(e.retry_after)
+            try:
+                await bot.send_message(user.telegram_id, text, reply_markup=kb)
+                sent += 1
+            except Exception:  # noqa: BLE001
+                failed += 1
+        except Exception:  # noqa: BLE001
+            failed += 1
+            logger.exception("reengagement failed for %s", user.telegram_id)
+        await asyncio.sleep(0.05)
+
+    logger.info(
+        "reengagement: users=%s sent=%s blocked=%s failed=%s",
+        len(users), sent, blocked, failed,
+    )
+    return {"total": len(users), "sent": sent, "blocked": blocked, "failed": failed}
