@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="uz">
 <head>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('malaka-admin-theme')||'light');}catch(e){}</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Buyurtmalar — Admin</title>
@@ -41,12 +42,38 @@ tr:hover td{background:#fafafa}
 .modal .val{font-weight:600;color:#111}
 .modal-actions{display:flex;gap:10px;margin-top:18px}
 .empty{padding:40px;text-align:center;color:#9ca3af;font-size:.9rem}
+.theme-btn{margin-left:auto;background:transparent;border:none;color:#a0aec0;font-size:1rem;cursor:pointer;padding:6px 10px;border-radius:8px}
+.theme-btn:hover{background:rgba(255,255,255,.1)}
+
+html[data-theme="dark"] body{background:#0f1420;color:#cdd3e0}
+html[data-theme="dark"] .topbar{background:#0a0e18;border-bottom:1px solid rgba(255,255,255,.05)}
+html[data-theme="dark"] .filter-btn{background:#1a2035;border-color:rgba(255,255,255,.1);color:#a3adc2}
+html[data-theme="dark"] .filter-btn.active{background:#6c63f6;border-color:#6c63f6;color:#fff}
+html[data-theme="dark"] table{background:#1a2035;box-shadow:none}
+html[data-theme="dark"] thead{background:#131828}
+html[data-theme="dark"] th{color:#7c8aa8}
+html[data-theme="dark"] td{border-top-color:rgba(255,255,255,.05);color:#a3adc2}
+html[data-theme="dark"] tr:hover td{background:rgba(255,255,255,.03)}
+html[data-theme="dark"] td b,html[data-theme="dark"] td div[style*="font-weight:600"]{color:#e2e8f0}
+html[data-theme="dark"] .btn-detail{background:#1e2a42;color:#a3adc2}
+html[data-theme="dark"] .btn-detail:hover{background:#26314f}
+html[data-theme="dark"] .modal{background:#1a2035;border:1px solid rgba(255,255,255,.08)}
+html[data-theme="dark"] .modal h3{color:#fff}
+html[data-theme="dark"] .modal .lbl{color:#7c8aa8}
+html[data-theme="dark"] .modal .val{color:#e2e8f0}
+html[data-theme="dark"] .modal textarea{background:#131828;border-color:rgba(255,255,255,.1);color:#fff}
+html[data-theme="dark"] .empty{color:#6d7a94}
+html[data-theme="dark"] .badge-pending{background:rgba(251,191,36,.15);color:#fbbf24}
+html[data-theme="dark"] .badge-confirmed{background:rgba(96,165,250,.15);color:#60a5fa}
+html[data-theme="dark"] .badge-processing{background:rgba(167,139,250,.15);color:#a78bfa}
+html[data-theme="dark"] .badge-shipped{background:rgba(52,211,153,.15);color:#34d399}
 </style>
 </head>
 <body>
 <div class="topbar">
   <a href="/admin/">← Admin panel</a>
   <h1>📦 Buyurtmalar boshqaruvi</h1>
+  <button class="theme-btn" id="theme-toggle" title="Yorug'/Tungi rejim">🌙</button>
 </div>
 
 <div class="wrap">
@@ -182,6 +209,20 @@ async function doAction(action){
 }
 
 document.getElementById('modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeModal(); });
+
+(function(){
+  const KEY='malaka-admin-theme';
+  const btn=document.getElementById('theme-toggle');
+  function ico(t){return t==='dark'?'☀️':'🌙';}
+  btn.textContent=ico(document.documentElement.getAttribute('data-theme')||'light');
+  btn.addEventListener('click',()=>{
+    const next=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+    document.documentElement.setAttribute('data-theme',next);
+    try{localStorage.setItem(KEY,next);}catch(e){}
+    btn.textContent=ico(next);
+  });
+})();
+
 load();
 </script>
 </body>

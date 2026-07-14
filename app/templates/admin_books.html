@@ -57,7 +57,7 @@ tbody tr:last-child td{border-bottom:none}
 .del:hover{background:rgba(220,58,58,.12);color:#dc2626}
 .empty{padding:40px 16px;text-align:center;color:#9aa2b8;font-size:.85rem}
 
-.toast{position:fixed;top:24px;right:24px;background:#ffffff;border:1px solid rgba(0,0,0,.1);color:#111827;padding:12px 18px;border-radius:10px;font-size:.85rem;display:flex;align-items:center;gap:10px;box-shadow:0 10px 40px rgba(16,24,40,.18);transform:translateX(120%);transition:transform .25s;z-index:200}
+.toast{position:fixed;top:24px;right:24px;background:#ffffff;border:1px solid rgba(0,0,0,.1);color:#111827;padding:12px 18px;border-radius:10px;font-size:.85rem;display:flex;align-items:center;gap:10px;box-shadow:0 10px 40px rgba(16,24,40,.18);transform:translateX(calc(100% + 40px));transition:transform .25s;z-index:200}
 .toast.show{transform:translateX(0)}
 .toast.ok{border-left:3px solid #22c98a}
 .toast.err{border-left:3px solid #dc2626}
@@ -76,7 +76,7 @@ html[data-theme="dark"] .card{background:#1a2035;border-color:rgba(255,255,255,.
 html[data-theme="dark"] .card-head{border-bottom-color:rgba(255,255,255,.05)}
 html[data-theme="dark"] .card-head h3{color:#fff}
 html[data-theme="dark"] .label{color:#a3adc2}
-html[data-theme="dark"] .input,html[data-theme="dark"] .textarea,html[data-theme="dark"] .select{background:#131828;border-color:rgba(255,255,255,.08);color:#fff}
+html[data-theme="dark"] .input,html[data-theme="dark"] .textarea,html[data-theme="dark"] .select{background-color:#131828;border-color:rgba(255,255,255,.08);color:#fff}
 html[data-theme="dark"] .drop{border-color:rgba(255,255,255,.12);color:#7c8aa8}
 html[data-theme="dark"] .drop:hover,html[data-theme="dark"] .drop.over{border-color:#6c63f6;color:#a78bfa;background:rgba(108,99,246,.08)}
 html[data-theme="dark"] .drop .fname{color:#fff}

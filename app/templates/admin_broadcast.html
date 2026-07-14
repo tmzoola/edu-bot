@@ -51,9 +51,22 @@ textarea{min-height:180px;resize:vertical;line-height:1.55}
 html[data-theme="dark"] body{background:#0b0e18;color:#cdd3e0}
 html[data-theme="dark"] .top{background:#0b0e18;border-color:rgba(255,255,255,.05)}
 html[data-theme="dark"] .brand,html[data-theme="dark"] .page-title{color:#fff}
+html[data-theme="dark"] .back-link{color:#7c8aa8}
+html[data-theme="dark"] .back-link:hover{background:rgba(255,255,255,.05);color:#fff}
+html[data-theme="dark"] .page-sub{color:#7c8aa8}
 html[data-theme="dark"] .card{background:#141824;border-color:rgba(255,255,255,.06)}
 html[data-theme="dark"] input,html[data-theme="dark"] textarea{background:#131828;border-color:rgba(255,255,255,.08);color:#fff}
+html[data-theme="dark"] input::placeholder,html[data-theme="dark"] textarea::placeholder{color:#4c5776}
 html[data-theme="dark"] label{color:#a3adc2}
+html[data-theme="dark"] .hint{color:#7c8aa8}
+html[data-theme="dark"] .stats-bar{background:rgba(108,99,246,.1);border-color:rgba(108,99,246,.25)}
+html[data-theme="dark"] .stat .v{color:#a78bfa}
+html[data-theme="dark"] .stat .l{color:#7c8aa8}
+html[data-theme="dark"] .btn-ghost{color:#a3adc2}
+html[data-theme="dark"] .btn-ghost:hover{background:rgba(255,255,255,.05);color:#fff}
+html[data-theme="dark"] .msg-ok{color:#4ade80}
+html[data-theme="dark"] .msg-err{color:#f87171}
+html[data-theme="dark"] .msg-info{color:#8b9cff}
 </style>
 </head>
 <body>
@@ -66,6 +79,7 @@ html[data-theme="dark"] label{color:#a3adc2}
         </a>
         <a href="/admin" class="back-link"><i class="fa fa-arrow-left"></i> Admin</a>
     </div>
+    <button class="back-link" id="theme-toggle" title="Yorug'/Tungi rejim" style="border:none;background:transparent;cursor:pointer;font-family:inherit"><i class="fa fa-moon"></i></button>
 </div>
 
 <div class="wrap">
@@ -154,6 +168,19 @@ $('send').addEventListener('click', async () => {
         btn.disabled = false; btn.innerHTML = '<i class="fa fa-paper-plane"></i> Yuborish';
     }
 });
+
+(function(){
+    const KEY='malaka-admin-theme';
+    function ico(t){return t==='dark'?'fa-sun':'fa-moon';}
+    const btn=document.getElementById('theme-toggle');
+    btn.querySelector('i').className='fa '+ico(document.documentElement.getAttribute('data-theme')||'light');
+    btn.addEventListener('click',()=>{
+        const next=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+        document.documentElement.setAttribute('data-theme',next);
+        try{localStorage.setItem(KEY,next);}catch(e){}
+        btn.querySelector('i').className='fa '+ico(next);
+    });
+})();
 </script>
 </body>
 </html>

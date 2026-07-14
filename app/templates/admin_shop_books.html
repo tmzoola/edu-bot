@@ -81,24 +81,46 @@ tbody tr:last-child td{border-bottom:none}
 .act-del{color:#dc2626;background:rgba(220,38,38,.06)}
 .act-del:hover{background:rgba(220,38,38,.14)}
 .empty{padding:40px;text-align:center;color:#9ca3af;font-size:.85rem}
-.toast{position:fixed;top:24px;right:24px;background:#fff;border:1px solid rgba(0,0,0,.1);color:#111827;padding:12px 18px;border-radius:10px;font-size:.85rem;display:flex;align-items:center;gap:10px;box-shadow:0 10px 40px rgba(16,24,40,.18);transform:translateX(120%);transition:transform .25s;z-index:200}
+.toast{position:fixed;top:24px;right:24px;background:#fff;border:1px solid rgba(0,0,0,.1);color:#111827;padding:12px 18px;border-radius:10px;font-size:.85rem;display:flex;align-items:center;gap:10px;box-shadow:0 10px 40px rgba(16,24,40,.18);transform:translateX(calc(100% + 40px));transition:transform .25s;z-index:200}
 .toast.show{transform:translateX(0)}
 .toast.ok{border-left:3px solid #22c98a}
 .toast.err{border-left:3px solid #dc2626}
 
 html[data-theme="dark"] body{background:#0f1420;color:#cdd3e0}
 html[data-theme="dark"] .top{background:#0a0e18;border-bottom-color:rgba(255,255,255,.05)}
-html[data-theme="dark"] .card{background:#1a2035;border-color:rgba(255,255,255,.05)}
+html[data-theme="dark"] .brand{color:#fff}
+html[data-theme="dark"] .page-title{color:#fff}
+html[data-theme="dark"] .page-sub{color:#7c8aa8}
+html[data-theme="dark"] .card{background:#1a2035;border-color:rgba(255,255,255,.05);box-shadow:none}
 html[data-theme="dark"] .card-head{border-bottom-color:rgba(255,255,255,.05)}
-html[data-theme="dark"] .card-head h3,.page-title{color:#fff}
-html[data-theme="dark"] .input,.html[data-theme="dark"] .textarea{background:#131828;border-color:rgba(255,255,255,.08);color:#fff}
-html[data-theme="dark"] thead th{background:#131828;color:#6b7280}
+html[data-theme="dark"] .card-head h3{color:#fff}
+html[data-theme="dark"] .label{color:#a3adc2}
+html[data-theme="dark"] .input,html[data-theme="dark"] .textarea{background:#131828;border-color:rgba(255,255,255,.08);color:#fff}
+html[data-theme="dark"] .input::placeholder,html[data-theme="dark"] .textarea::placeholder{color:#4c5776}
+html[data-theme="dark"] thead th{background:#131828;color:#7c8aa8;border-bottom-color:rgba(255,255,255,.06)}
 html[data-theme="dark"] tbody td{color:#a3adc2;border-bottom-color:rgba(255,255,255,.05)}
 html[data-theme="dark"] .b-title{color:#e2e8f0}
-html[data-theme="dark"] .img-zone{border-color:rgba(255,255,255,.1)}
+html[data-theme="dark"] .b-meta{color:#6d7a94}
+html[data-theme="dark"] .img-zone{border-color:rgba(255,255,255,.12)}
+html[data-theme="dark"] .img-zone:hover,html[data-theme="dark"] .img-zone.over{border-color:#6c63f6;background:rgba(108,99,246,.08)}
+html[data-theme="dark"] .img-placeholder{color:#6d7a94}
+html[data-theme="dark"] .img-actions button{background:#131828;border-color:rgba(255,255,255,.12);color:#a3adc2}
+html[data-theme="dark"] .img-actions button:hover{background:#1e2a42}
+html[data-theme="dark"] .img-actions .del-img{border-color:rgba(248,113,113,.4);color:#f87171}
+html[data-theme="dark"] .img-actions .del-img:hover{background:rgba(248,113,113,.1)}
+html[data-theme="dark"] .cover-placeholder{background:#131828;color:#4c5776}
+html[data-theme="dark"] .toggle{background:#2a3247}
+html[data-theme="dark"] .toggle.on{background:#6c63f6}
 html[data-theme="dark"] .btn-secondary{background:#1e2a42;color:#a3adc2}
+html[data-theme="dark"] .btn-secondary:hover{background:#26314f}
 html[data-theme="dark"] .back-link{color:#7c8aa8}
+html[data-theme="dark"] .back-link:hover{background:rgba(255,255,255,.05);color:#fff}
 html[data-theme="dark"] .toggle-lbl{color:#a3adc2}
+html[data-theme="dark"] .chip-off{background:#1e2a42;color:#7c8aa8}
+html[data-theme="dark"] .act-edit{background:rgba(108,99,246,.15)}
+html[data-theme="dark"] .act-del{background:rgba(248,113,113,.1);color:#f87171}
+html[data-theme="dark"] .empty{color:#6d7a94}
+html[data-theme="dark"] .toast{background:#1e2439;border-color:rgba(255,255,255,.08);color:#fff;box-shadow:0 10px 40px rgba(0,0,0,.5)}
 </style>
 </head>
 <body>
@@ -190,42 +212,10 @@ html[data-theme="dark"] .toggle-lbl{color:#a3adc2}
               <th>Amal</th>
             </tr>
           </thead>
-          <tbody id="books-tbody">
-            {% for b in books %}
-            <tr id="row-{{b.id}}" data-id="{{b.id}}">
-              <td>
-                {% if b.cover_image_url %}
-                  <img src="{{b.cover_image_url}}" class="cover-thumb" alt="">
-                {% else %}
-                  <div class="cover-placeholder"><i class="fa fa-book"></i></div>
-                {% endif %}
-              </td>
-              <td>
-                <div class="b-title">{{b.title}}</div>
-                {% if b.description %}
-                <div class="b-meta">{{b.description[:60]}}{% if b.description|length > 60 %}…{% endif %}</div>
-                {% endif %}
-              </td>
-              <td><span class="price-tag">{{"{:,}".format(b.price).replace(",", " ")}} so'm</span></td>
-              <td><span class="chip {{'chip-on' if b.is_active else 'chip-off'}}">{{'Faol' if b.is_active else 'Nofaol'}}</span></td>
-              <td>
-                <div class="row-actions">
-                  <button class="act act-edit" onclick="editBook({{b.id}}, {{b.title|tojson}}, {{(b.description or '')|tojson}}, {{b.price}}, {{b.order}}, {{b.is_active|tojson}}, {{(b.cover_image_url or '')|tojson}})">
-                    <i class="fa fa-pen"></i> Tahrirlash
-                  </button>
-                  <button class="act act-del" onclick="deleteBook({{b.id}}, {{b.title|tojson}})">
-                    <i class="fa fa-trash"></i>
-                  </button>
-                </div>
-              </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="5" class="empty">Hali kitob qo'shilmagan</td></tr>
-            {% endfor %}
-          </tbody>
+          <tbody id="books-tbody"></tbody>
         </table>
         <div id="count-footer" style="padding:10px 16px;font-size:.8rem;color:#6b7280">
-          Jami: <b>{{books|length}}</b> ta kitob
+          Jami: <b id="books-count">0</b> ta kitob
         </div>
       </div>
     </div>
@@ -235,8 +225,55 @@ html[data-theme="dark"] .toggle-lbl{color:#a3adc2}
 <div class="toast" id="toast"></div>
 
 <script>
+const BOOKS = {{ books | tojson }};
 let isActive = true;
 let coverUrl = '';
+
+function esc(s){ const d=document.createElement('div'); d.textContent=s??''; return d.innerHTML; }
+function fmtPrice(n){ return Number(n).toLocaleString('ru-RU').replace(/\s/g,' ') + ' so\'m'; }
+
+function renderBooks(){
+  const tbody = document.getElementById('books-tbody');
+  document.getElementById('books-count').textContent = BOOKS.length;
+  if(!BOOKS.length){
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">Hali kitob qo\'shilmagan</td></tr>';
+    return;
+  }
+  tbody.innerHTML = BOOKS.map(b => `
+    <tr id="row-${b.id}">
+      <td>${b.cover_image_url
+        ? `<img src="${esc(b.cover_image_url)}" class="cover-thumb" alt="">`
+        : `<div class="cover-placeholder"><i class="fa fa-book"></i></div>`}</td>
+      <td>
+        <div class="b-title">${esc(b.title)}</div>
+        ${b.description ? `<div class="b-meta">${esc(b.description.length>60 ? b.description.slice(0,60)+'…' : b.description)}</div>` : ''}
+      </td>
+      <td><span class="price-tag">${fmtPrice(b.price)}</span></td>
+      <td><span class="chip ${b.is_active?'chip-on':'chip-off'}">${b.is_active?'Faol':'Nofaol'}</span></td>
+      <td>
+        <div class="row-actions">
+          <button class="act act-edit" data-id="${b.id}"><i class="fa fa-pen"></i> Tahrirlash</button>
+          <button class="act act-del" data-id="${b.id}"><i class="fa fa-trash"></i></button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+
+  document.querySelectorAll('.act-edit[data-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const b = BOOKS.find(x => x.id == btn.dataset.id);
+      if(b) editBook(b);
+    });
+  });
+  document.querySelectorAll('.act-del[data-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const b = BOOKS.find(x => x.id == btn.dataset.id);
+      if(b) deleteBook(b.id, b.title);
+    });
+  });
+}
+
+renderBooks();
 
 function toast(msg, ok=true){
   const el = document.getElementById('toast');
@@ -310,23 +347,23 @@ function resetForm(){
   document.getElementById('active-toggle').className = 'toggle on';
 }
 
-function editBook(id, title, desc, price, order, active, cover){
-  document.getElementById('edit-id').value = id;
-  document.getElementById('f-title').value = title;
-  document.getElementById('f-desc').value = desc;
-  document.getElementById('f-price').value = price;
-  document.getElementById('f-order').value = order;
+function editBook(b){
+  document.getElementById('edit-id').value = b.id;
+  document.getElementById('f-title').value = b.title;
+  document.getElementById('f-desc').value = b.description || '';
+  document.getElementById('f-price').value = b.price;
+  document.getElementById('f-order').value = b.order;
   document.getElementById('form-title').textContent = 'Kitobni tahrirlash';
   document.getElementById('reset-btn').style.display = '';
   document.getElementById('reset-btn2').style.display = '';
-  isActive = active;
-  document.getElementById('active-toggle').className = 'toggle' + (active ? ' on' : '');
+  isActive = b.is_active;
+  document.getElementById('active-toggle').className = 'toggle' + (b.is_active ? ' on' : '');
 
-  coverUrl = cover || '';
+  coverUrl = b.cover_image_url || '';
   document.getElementById('f-cover-url').value = coverUrl;
-  if(cover){
+  if(coverUrl){
     const img = document.getElementById('img-preview');
-    img.src = cover;
+    img.src = coverUrl;
     img.style.display = 'block';
     document.getElementById('img-placeholder').style.display = 'none';
     document.getElementById('img-actions').style.display = 'flex';
@@ -380,7 +417,9 @@ async function deleteBook(id, title){
   if(!confirm(`"${title}" ni o'chirasizmi?`)) return;
   const r = await fetch(`/admin-tools/shop-books/${id}`, {method:'DELETE'});
   if(r.ok){
-    document.getElementById(`row-${id}`)?.remove();
+    const idx = BOOKS.findIndex(b => b.id == id);
+    if(idx !== -1) BOOKS.splice(idx, 1);
+    renderBooks();
     toast('Kitob o\'chirildi');
   } else {
     toast('Xatolik', false);

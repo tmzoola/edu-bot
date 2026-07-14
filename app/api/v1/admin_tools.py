@@ -425,12 +425,24 @@ async def upload_shop_image(file: UploadFile = File(...)):
 
 @router.get("/shop-books", response_class=HTMLResponse)
 async def shop_books_page(request: Request, db: AsyncSession = Depends(get_db)):
-    books = (
+    books_orm = (
         await db.execute(select(ShopBook).order_by(ShopBook.order, ShopBook.id))
     ).scalars().all()
+    books_data = [
+        {
+            "id": b.id,
+            "title": b.title,
+            "description": b.description,
+            "price": b.price,
+            "order": b.order,
+            "is_active": b.is_active,
+            "cover_image_url": b.cover_image_url,
+        }
+        for b in books_orm
+    ]
     return templates.TemplateResponse(
         "admin_shop_books.html",
-        {"request": request, "books": books},
+        {"request": request, "books": books_data},
     )
 
 

@@ -49,7 +49,14 @@ html[data-theme="dark"] .card{background:#1a2035;border-color:rgba(255,255,255,.
 html[data-theme="dark"] .card-desc,html[data-theme="dark"] .meta{color:#7c8aa8}
 html[data-theme="dark"] .meta b{color:#fff}
 html[data-theme="dark"] .btn-ghost{background:transparent;color:#b8c1d3;border-color:rgba(255,255,255,.1)}
+html[data-theme="dark"] .btn-ghost:hover{background:rgba(255,255,255,.05);color:#fff}
 html[data-theme="dark"] .empty{background:#1a2035;border-color:rgba(255,255,255,.08);color:#7c8aa8}
+html[data-theme="dark"] .back-link{color:#7c8aa8}
+html[data-theme="dark"] .back-link:hover{background:rgba(255,255,255,.05);color:#fff}
+html[data-theme="dark"] .page-sub{color:#7c8aa8}
+html[data-theme="dark"] .st-inactive{background:rgba(255,255,255,.06);color:#7c8aa8}
+html[data-theme="dark"] .st-live{color:#4ade80}
+html[data-theme="dark"] .st-upcoming{color:#93c5fd}
 </style>
 </head>
 <body>
@@ -58,6 +65,7 @@ html[data-theme="dark"] .empty{background:#1a2035;border-color:rgba(255,255,255,
         <a href="/admin/" class="brand"><span class="brand-ic"><i class="fa fa-trophy"></i></span> Muslima Darmonova</a>
         <a href="/admin/" class="back-link"><i class="fa fa-arrow-left"></i> Admin</a>
     </div>
+    <button class="back-link" id="theme-toggle" title="Yorug'/Tungi rejim" style="border:none;background:transparent;cursor:pointer;font-family:inherit"><i class="fa fa-moon"></i></button>
 </div>
 
 <div class="wrap">
@@ -72,7 +80,7 @@ html[data-theme="dark"] .empty{background:#1a2035;border-color:rgba(255,255,255,
     {% if not contests %}
         <div class="empty">
             <div style="font-size:2rem;margin-bottom:8px">🏆</div>
-            <div style="font-weight:700;color:#111827;margin-bottom:4px">Hozircha yutuqli test yo'q</div>
+            <div style="font-weight:700;margin-bottom:4px">Hozircha yutuqli test yo'q</div>
             <div style="font-size:.85rem">Birinchi musobaqani yarating.</div>
         </div>
     {% else %}
@@ -126,6 +134,19 @@ async function del(id, title){
     if (r.ok) location.reload();
     else alert("Xatolik");
 }
+
+(function(){
+    const KEY='malaka-admin-theme';
+    function ico(t){return t==='dark'?'fa-sun':'fa-moon';}
+    const btn=document.getElementById('theme-toggle');
+    btn.querySelector('i').className='fa '+ico(document.documentElement.getAttribute('data-theme')||'light');
+    btn.addEventListener('click',()=>{
+        const next=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+        document.documentElement.setAttribute('data-theme',next);
+        try{localStorage.setItem(KEY,next);}catch(e){}
+        btn.querySelector('i').className='fa '+ico(next);
+    });
+})();
 </script>
 </body>
 </html>

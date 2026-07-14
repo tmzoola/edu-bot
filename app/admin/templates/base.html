@@ -119,6 +119,17 @@
             color: #1f2430 !important;
         }
         .form-control::placeholder { color: #aab0c0 !important; }
+        .form-control[type="file"]::file-selector-button {
+            background-color: #f1f2f7 !important;
+            color: #3b4256 !important;
+            border: none;
+            border-right: 1px solid rgba(0,0,0,.1);
+            padding: .45rem .9rem;
+            margin-right: .9rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .form-control[type="file"]::file-selector-button:hover { background-color: #e5e7ef !important; }
         .form-label { color: #4b5563 !important; font-weight: 600; font-size: .8rem; }
         .form-hint, .form-text { color: #6b7280 !important; }
         .form-check-input:checked { background-color: #6c63f6 !important; border-color: #6c63f6 !important; }
@@ -262,6 +273,12 @@
         html[data-theme="dark"] .form-control, html[data-theme="dark"] .form-select, html[data-theme="dark"] .form-check-input { background-color: #131828 !important; border-color: rgba(255,255,255,.08) !important; color: #fff !important; }
         html[data-theme="dark"] .form-control:focus, html[data-theme="dark"] .form-select:focus { background-color: #131828 !important; border-color: #6c63f6 !important; color: #fff !important; }
         html[data-theme="dark"] .form-control::placeholder { color: #4c5776 !important; }
+        html[data-theme="dark"] .form-control[type="file"]::file-selector-button {
+            background-color: #1e2a42 !important;
+            color: #cdd3e0 !important;
+            border-right: 1px solid rgba(255,255,255,.08);
+        }
+        html[data-theme="dark"] .form-control[type="file"]::file-selector-button:hover { background-color: #26314f !important; }
         html[data-theme="dark"] .form-label { color: #a3adc2 !important; }
         html[data-theme="dark"] .form-hint, html[data-theme="dark"] .form-text { color: #7c8aa8 !important; }
         html[data-theme="dark"] .btn-secondary, html[data-theme="dark"] .btn-white, html[data-theme="dark"] .btn-outline-secondary { background-color: #1a2035 !important; border-color: rgba(255,255,255,.1) !important; color: #cdd3e0 !important; }

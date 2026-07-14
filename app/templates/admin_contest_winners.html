@@ -52,12 +52,27 @@ html[data-theme="dark"] .card,html[data-theme="dark"] .medal{background:#1a2035;
 html[data-theme="dark"] tbody td{color:#b8c1d3;border-bottom-color:rgba(255,255,255,.04)}
 html[data-theme="dark"] thead th{background:#131828;color:#7c8aa8;border-bottom-color:rgba(255,255,255,.06)}
 html[data-theme="dark"] .btn-ghost{background:transparent;color:#b8c1d3;border-color:rgba(255,255,255,.1)}
+html[data-theme="dark"] .btn-ghost:hover{background:rgba(255,255,255,.05);color:#fff}
+html[data-theme="dark"] .page-sub{color:#7c8aa8}
+html[data-theme="dark"] .page-sub b{color:#e2e8f0}
+html[data-theme="dark"] .medal.g1{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4)}
+html[data-theme="dark"] .medal.g2{background:rgba(148,163,184,.1);border-color:rgba(148,163,184,.4)}
+html[data-theme="dark"] .medal.g3{background:rgba(234,88,12,.12);border-color:rgba(234,88,12,.4)}
+html[data-theme="dark"] .medal .stats{color:#a3adc2}
+html[data-theme="dark"] .medal .stats b{color:#fff}
+html[data-theme="dark"] tbody td b{color:#e2e8f0}
+html[data-theme="dark"] .rank-pill{background:rgba(255,255,255,.06);color:#a3adc2}
+html[data-theme="dark"] .rank-pill.g1{background:rgba(245,158,11,.18);color:#fbbf24}
+html[data-theme="dark"] .rank-pill.g2{background:rgba(148,163,184,.15);color:#cbd5e1}
+html[data-theme="dark"] .rank-pill.g3{background:rgba(234,88,12,.18);color:#fb923c}
+html[data-theme="dark"] .empty{color:#7c8aa8}
 </style>
 </head>
 <body>
 <div class="top">
     <a href="/admin-tools/contests" class="brand"><span class="brand-ic"><i class="fa fa-trophy"></i></span> Muslima Darmonova</a>
     <div class="top-actions">
+        <button class="btn btn-ghost" id="theme-toggle" title="Yorug'/Tungi rejim"><i class="fa fa-moon"></i></button>
         <a href="/admin-tools/contests" class="btn btn-ghost"><i class="fa fa-arrow-left"></i> Ro'yxatga</a>
         <a href="/admin-tools/contests/{{ contest.id }}/export" class="btn btn-primary"><i class="fa fa-file-excel"></i> Excel'ga yuklab olish</a>
     </div>
@@ -116,9 +131,24 @@ html[data-theme="dark"] .btn-ghost{background:transparent;color:#b8c1d3;border-c
     {% else %}
         <div class="empty card" style="padding:60px 20px">
             <div style="font-size:2rem;margin-bottom:8px">🕐</div>
-            <div style="font-weight:700;color:#111827;margin-bottom:4px">Hozircha ishtirokchi yo'q</div>
+            <div style="font-weight:700;margin-bottom:4px">Hozircha ishtirokchi yo'q</div>
         </div>
     {% endif %}
 </div>
+
+<script>
+(function(){
+    const KEY='malaka-admin-theme';
+    function ico(t){return t==='dark'?'fa-sun':'fa-moon';}
+    const btn=document.getElementById('theme-toggle');
+    btn.querySelector('i').className='fa '+ico(document.documentElement.getAttribute('data-theme')||'light');
+    btn.addEventListener('click',()=>{
+        const next=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+        document.documentElement.setAttribute('data-theme',next);
+        try{localStorage.setItem(KEY,next);}catch(e){}
+        btn.querySelector('i').className='fa '+ico(next);
+    });
+})();
+</script>
 </body>
 </html>

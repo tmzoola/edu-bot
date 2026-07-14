@@ -72,7 +72,7 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,san
 .save-bar{position:sticky;bottom:0;background:#fff;border-top:1px solid rgba(0,0,0,.08);margin:24px -28px -28px;padding:14px 28px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
 .save-summary{color:#6b7280;font-size:.85rem}
 
-.toast{position:fixed;top:24px;right:24px;background:#fff;border:1px solid rgba(0,0,0,.1);padding:12px 18px;border-radius:10px;font-size:.85rem;box-shadow:0 10px 40px rgba(16,24,40,.18);transform:translateX(120%);transition:transform .25s;z-index:200}
+.toast{position:fixed;top:24px;right:24px;background:#fff;border:1px solid rgba(0,0,0,.1);padding:12px 18px;border-radius:10px;font-size:.85rem;box-shadow:0 10px 40px rgba(16,24,40,.18);transform:translateX(calc(100% + 40px));transition:transform .25s;z-index:200}
 .toast.show{transform:translateX(0)}
 .toast.ok{border-left:3px solid #22c98a}
 .toast.err{border-left:3px solid #dc2626}
@@ -86,12 +86,55 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,san
 .modal-body .hint{background:#f7f8fc;border:1px solid rgba(0,0,0,.07);border-radius:9px;padding:12px 14px;color:#6b7280;font-size:.8rem;margin-bottom:12px;line-height:1.6}
 .modal-body .hint code{background:rgba(108,99,246,.14);color:#6c63f6;padding:2px 6px;border-radius:4px;font-size:.78rem}
 .modal-foot{padding:12px 20px;border-top:1px solid rgba(0,0,0,.07);display:flex;justify-content:flex-end;gap:10px}
+
+html[data-theme="dark"] body{background:#0f1420;color:#cdd3e0}
+html[data-theme="dark"] .top{background:#0a0e18;border-bottom-color:rgba(255,255,255,.05)}
+html[data-theme="dark"] .brand{color:#fff}
+html[data-theme="dark"] .back-link{color:#7c8aa8}
+html[data-theme="dark"] .back-link:hover{background:rgba(255,255,255,.05);color:#fff}
+html[data-theme="dark"] .btn-ghost{background:transparent;color:#b8c1d3;border-color:rgba(255,255,255,.1)}
+html[data-theme="dark"] .btn-ghost:hover{background:rgba(255,255,255,.05);color:#fff}
+html[data-theme="dark"] .page-title{color:#fff}
+html[data-theme="dark"] .page-sub{color:#7c8aa8}
+html[data-theme="dark"] .card{background:#1a2035;border-color:rgba(255,255,255,.05);box-shadow:none}
+html[data-theme="dark"] .card-head{border-bottom-color:rgba(255,255,255,.05)}
+html[data-theme="dark"] .card-head h3{color:#fff}
+html[data-theme="dark"] .label{color:#a3adc2}
+html[data-theme="dark"] .input,html[data-theme="dark"] .textarea{background-color:#131828;border-color:rgba(255,255,255,.08);color:#fff}
+html[data-theme="dark"] .input::placeholder,html[data-theme="dark"] .textarea::placeholder{color:#4c5776}
+html[data-theme="dark"] .hint{color:#7c8aa8}
+html[data-theme="dark"] .q-toolbar{background:#131828;border-bottom-color:rgba(255,255,255,.05)}
+html[data-theme="dark"] .q-count{color:#7c8aa8}
+html[data-theme="dark"] .q-count b{color:#fff}
+html[data-theme="dark"] .q-item{border-bottom-color:rgba(255,255,255,.04)}
+html[data-theme="dark"] .q-num{background:rgba(245,158,11,.18);color:#fbbf24}
+html[data-theme="dark"] .q-del{color:#4c5776}
+html[data-theme="dark"] .q-del:hover{background:rgba(220,58,58,.15);color:#f87171}
+html[data-theme="dark"] .q-img-btn{background:#131828;border-color:rgba(255,255,255,.12);color:#7c8aa8}
+html[data-theme="dark"] .q-img-btn:hover{border-color:#6c63f6;color:#fff}
+html[data-theme="dark"] .q-img-preview img{border-color:rgba(255,255,255,.1)}
+html[data-theme="dark"] .q-opt{background:#131828;border-color:rgba(255,255,255,.06)}
+html[data-theme="dark"] .q-opt.is-correct{background:rgba(34,197,138,.06);border-color:#22c98a}
+html[data-theme="dark"] .q-opt-letter{background:rgba(255,255,255,.06);color:#a3adc2}
+html[data-theme="dark"] .q-opt input[type=text]{color:#fff}
+html[data-theme="dark"] .q-add-btn{border-color:rgba(255,255,255,.1);color:#7c8aa8}
+html[data-theme="dark"] .q-add-btn:hover{border-color:#6c63f6;color:#fff;background:rgba(108,99,246,.08)}
+html[data-theme="dark"] .save-bar{background:#0a0e18;border-top-color:rgba(255,255,255,.06)}
+html[data-theme="dark"] .save-summary{color:#7c8aa8}
+html[data-theme="dark"] .modal-back{background:rgba(0,0,0,.7)}
+html[data-theme="dark"] .modal{background:#1a2035;border:1px solid rgba(255,255,255,.08);box-shadow:none}
+html[data-theme="dark"] .modal-head{border-bottom-color:rgba(255,255,255,.05)}
+html[data-theme="dark"] .modal-head h3{color:#fff}
+html[data-theme="dark"] .modal-foot{border-top-color:rgba(255,255,255,.05)}
+html[data-theme="dark"] .modal-body .hint{background:#131828;border-color:rgba(255,255,255,.06);color:#7c8aa8}
+html[data-theme="dark"] .toast{background:#1e2439;border-color:rgba(255,255,255,.08);color:#fff;box-shadow:0 10px 40px rgba(0,0,0,.5)}
 </style>
 </head>
 <body>
 <div class="top">
     <a href="/admin-tools/contests" class="brand"><span class="brand-ic"><i class="fa fa-trophy"></i></span> Muslima Darmonova</a>
     <div class="top-actions">
+        <button class="btn btn-ghost btn-sm" id="theme-toggle" title="Yorug'/Tungi rejim"><i class="fa fa-moon"></i></button>
         <a href="/admin-tools/contests" class="btn btn-ghost btn-sm"><i class="fa fa-arrow-left"></i> Ro'yxatga</a>
         <button class="btn btn-ghost btn-sm" onclick="openBulk()"><i class="fa fa-paste"></i> Ko'p savol yopishtirish</button>
         <button class="btn btn-primary" id="btn-save"><i class="fa fa-check"></i> Saqlash</button>
@@ -386,6 +429,19 @@ function toast(msg, kind){
 document.getElementById('btn-save').addEventListener('click', save);
 if (!questions.length) addQ();
 else render();
+
+(function(){
+    const KEY='malaka-admin-theme';
+    function ico(t){return t==='dark'?'fa-sun':'fa-moon';}
+    const btn=document.getElementById('theme-toggle');
+    btn.querySelector('i').className='fa '+ico(document.documentElement.getAttribute('data-theme')||'light');
+    btn.addEventListener('click',()=>{
+        const next=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+        document.documentElement.setAttribute('data-theme',next);
+        try{localStorage.setItem(KEY,next);}catch(e){}
+        btn.querySelector('i').className='fa '+ico(next);
+    });
+})();
 </script>
 </body>
 </html>
