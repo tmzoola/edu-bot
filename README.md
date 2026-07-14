@@ -1,153 +1,127 @@
-# Samandar Market — POS
+# Muslima Darmonova — Edu Bot
 
-A supermarket Point-of-Sale system with a fast web cashier dashboard and a
-full admin panel (product CRUD, daily / weekly reports, CSV export).
+Telegram Mini App + Admin Panel for an Uzbek educational platform. Users solve quizzes, track scores on a leaderboard, buy books, and participate in timed competitions — all inside Telegram. Admins manage content through a full-featured web panel.
 
 ## Features
 
-- **Cashier dashboard** — split layout (65% product grid · 35% live basket),
-  category tabs, instant search, +/- quantity controls, cash-received with
-  auto-calculated change + "exact cash" shortcut, big Checkout button, and a
-  receipt modal with a Cancel/void option for mistakes. Every checkout is
-  persisted to PostgreSQL.
-- **Admin panel** at `/admin` — JWT cookie login, product CRUD with soft
-  delete, daily report (date picker, summary cards, hourly bar chart,
-  expandable transactions, CSV export), weekly overview (today-vs-yesterday,
-  weekly chart, top-5 products). Charts are drawn on plain `<canvas>` — zero
-  JS libraries.
-- **Persistence** — PostgreSQL 15 + async SQLAlchemy + Alembic migrations.
-  Seeds 24 sample products and a default admin (`admin` / `admin123`) on first
-  startup.
-- **Self-contained** — `docker compose up -d` brings up Postgres + the
-  FastAPI app, runs migrations, and starts serving. One command.
+### Bot
+- Persistent reply keyboard with **Test ishlash** (opens Mini App), **Kitoblar do'koni**, **Ma'lumot**
+- Daily quiz notifications
+- Re-engagement notifications — users inactive for 3+ days get a personalized message at 10:00 Tashkent time
+- Book shop: admin posts books with prices; users pay via card, admin confirms payment, bot collects delivery info via FSM, order tracking in Mini App
 
-## Tech stack
+### Mini App (WebApp)
+- Module → Topic → Quiz flow with a timer and score tracking
+- Leaderboard (day / week / month / all-time)
+- Daily quiz with a countdown to the next one
+- Timed competitions (contests) with a live scoreboard
+- Profile page with order history
+- Dark mode, fully mobile-friendly
 
-| Layer            | Library                                          |
-|------------------|--------------------------------------------------|
-| Web              | FastAPI + uvicorn                                |
-| Database         | PostgreSQL 15, SQLAlchemy 2.x async + asyncpg    |
-| Migrations       | Alembic (async env)                              |
-| Auth             | JWT cookie (`python-jose`) + bcrypt passwords    |
-| Frontend         | Plain HTML/CSS/JS — zero framework, two files    |
+### Admin Panel (`/admin/`)
+- **Test yaratish** — rich quiz builder: create/edit quizzes with bulk-paste support
+- **Yutuqli testlar** — create and manage timed contest quizzes with winner boards and Excel export
+- **Kitob yuklash** — upload PDF/EPUB books for in-app reading
+- **Do'kon kitoblari** — manage shop books with cover image upload
+- **Buyurtmalar boshqaruvi** — order management with confirm/ship actions that message the buyer
+- **Reyting** — live leaderboard across all periods
+- **Motivatsiya** — manage motivational quotes shown on the home screen
+- **Xabar yuborish** — broadcast messages to all active users
+- **Foydalanuvchilar** — user list with registration stats
+- Consistent dark/light theme across all pages
 
-## Quick start (Docker)
+## Tech Stack
+
+| Layer        | Technology                                                  |
+|--------------|-------------------------------------------------------------|
+| Bot          | aiogram 3.x, aiogram FSM                                   |
+| Web          | FastAPI + Jinja2 templates + uvicorn                       |
+| Admin panel  | starlette-admin with custom template overrides              |
+| Database     | PostgreSQL + SQLAlchemy 2.x async + asyncpg                |
+| Migrations   | Alembic (async)                                             |
+| Scheduling   | asyncio background task (lifespan)                         |
+| Time zone    | `zoneinfo` — Asia/Tashkent (UTC+5)                        |
+| Media        | Local filesystem (`/media/`), served as static files        |
+| Deployment   | Docker Compose (db + app)                                   |
+
+## Quick Start
 
 ```bash
-git clone <your-repo-url> samandar_market
-cd samandar_market
+git clone <repo-url> edu-bot
+cd edu-bot
 
 cp .env.example .env
-# Defaults work out of the box. Optionally set JWT_SECRET (otherwise a random
-# one is generated per process and admin sessions invalidate on restart).
+# Fill in BOT_TOKEN, WEBAPP_URL, DATABASE_URL, etc.
 
-docker compose up -d
+docker compose up -d --build
 ```
 
-- **Cashier dashboard**: <http://localhost:8000>
-- **Admin panel**: <http://localhost:8000/admin>  — first login is
-  `admin` / `admin123` (logged to the container on first startup).
+After startup:
+- **Mini App**: `WEBAPP_URL/webapp/`
+- **Admin panel**: `http://localhost:8000/admin/`
 
-### Logs / rebuild
+### Rebuild after code changes
 
 ```bash
-docker compose logs -f app
-docker compose up -d --build           # after Python or dependency changes
+docker compose up -d --build
 ```
 
-The `public/` folder is bind-mounted, so **frontend edits do not require a
-rebuild** — just refresh the browser.
+## Environment Variables
 
-## Local development (without Docker)
+| Variable            | Purpose                                              |
+|---------------------|------------------------------------------------------|
+| `BOT_TOKEN`         | Telegram bot token from @BotFather                  |
+| `WEBAPP_URL`        | Public HTTPS URL where the Mini App is served        |
+| `DATABASE_URL`      | `postgresql+asyncpg://user:pass@host:port/db`        |
+| `POSTGRES_USER`     | Postgres container user                              |
+| `POSTGRES_PASSWORD` | Postgres container password                          |
+| `POSTGRES_DB`       | Postgres database name                               |
+| `ADMIN_USERNAME`    | Default admin login                                  |
+| `ADMIN_PASSWORD`    | Default admin password                               |
+
+## Project Layout
+
+```
+app/
+├── main.py                  FastAPI app entrypoint, lifespan, re-engagement scheduler
+├── bot/
+│   └── router.py            aiogram handlers, FSM states, reply keyboard, shop flow
+├── api/v1/
+│   ├── webapp.py            Mini App pages + REST API (quizzes, leaderboard, orders…)
+│   └── admin_tools.py       Custom admin tool endpoints (builder, shop, orders, …)
+├── admin/
+│   ├── __init__.py          starlette-admin setup, view registration
+│   ├── views/               Per-model admin views (quiz, book, user, shop, …)
+│   └── templates/           starlette-admin base.html override (theme, dark mode)
+├── models/                  SQLAlchemy ORM models
+├── migrations/              Alembic migration versions
+├── services/
+│   └── notifications.py     Re-engagement & daily quiz notification logic
+├── templates/               Jinja2 HTML templates (Mini App + admin tools)
+│   ├── admin_builder.html
+│   ├── admin_shop_books.html
+│   ├── admin_orders.html
+│   └── …
+└── db/
+    └── session.py           Async engine + session factory
+docker-compose.yml
+Dockerfile
+```
+
+## Migrations
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env  # change DATABASE_URL host to localhost
+# Inside the container
+docker exec -it malaka_app alembic upgrade head
 
-# Start Postgres however you like (e.g. just the db service from compose):
-docker compose up -d db
-
-# Apply migrations:
-alembic upgrade head
-
-# Run the app (seeds run automatically in lifespan on first start):
-uvicorn main:app --reload --port 8000
+# Or generate a new migration after model changes
+docker exec -it malaka_app alembic revision --autogenerate -m "description"
 ```
-
-## Environment variables
-
-| Key                          | Purpose                                                                  |
-|------------------------------|--------------------------------------------------------------------------|
-| `DATABASE_URL`               | Async SQLAlchemy URL — `postgresql+asyncpg://user:pass@host:port/db`.    |
-| `POSTGRES_USER/PASSWORD/DB`  | Used by the Postgres container.                                          |
-| `JWT_SECRET`                 | Admin session signing key. Random per-process if unset.                  |
-| `ADMIN_DEFAULT_USERNAME`     | Seed admin username (default `admin`, used only on first start).         |
-| `ADMIN_DEFAULT_PASSWORD`     | Seed admin password (default `admin123`, **change after first login**).  |
-
-## Endpoints
-
-### Public
-| Method | Path                | Purpose                                              |
-|--------|---------------------|------------------------------------------------------|
-| GET    | `/`                 | Cashier dashboard.                                   |
-| GET    | `/admin`            | Admin SPA (login + admin views).                     |
-| GET    | `/health`           | `{"status": "ok"}`. Used by Docker healthcheck.      |
-| GET    | `/api/products`     | Active products + category list.                     |
-| POST   | `/api/checkout`     | `{items, cash_received}` → persisted transaction.    |
-| DELETE | `/api/transactions/{id}` | Void a just-completed transaction (used by receipt modal). |
-
-### Admin (require JWT cookie)
-| Method | Path                                  | Purpose                                  |
-|--------|---------------------------------------|------------------------------------------|
-| POST   | `/admin/login`                        | `{username, password}` → sets cookie.    |
-| GET    | `/admin/logout`                       | Clears the cookie.                       |
-| GET    | `/admin/me`                           | Current admin (used by SPA to check auth).|
-| GET    | `/admin/products`                     | All products (incl. inactive).           |
-| POST   | `/api/products`                       | Create.                                  |
-| PUT    | `/api/products/{id}`                  | Update.                                  |
-| DELETE | `/api/products/{id}`                  | Soft delete (`is_active=false`).         |
-| GET    | `/api/reports/daily?date=YYYY-MM-DD`  | Daily report.                            |
-| GET    | `/api/reports/weekly`                 | Weekly overview.                         |
-| GET    | `/api/reports/top-products?period=...`| Top 5 products (`day`/`week`/`month`).   |
-| GET    | `/api/reports/export?date=YYYY-MM-DD` | CSV download for the given day.          |
-
-## Project layout
-
-```
-main.py                FastAPI app — routes + seed lifecycle
-database.py            Async SQLAlchemy engine + session factory
-models.py              ORM models (Product, Transaction, TransactionItem, Admin)
-schemas.py             Pydantic request/response models
-crud.py                DB queries + report aggregates
-auth.py                JWT cookie helpers, bcrypt, get_current_admin dep
-seed.py                Initial products + default admin (runs in lifespan)
-products.py            Static seed list (only used by seed.py)
-alembic.ini            Alembic config
-migrations/            Async Alembic env + initial schema
-public/index.html      Cashier dashboard (single-file)
-public/admin.html      Admin panel (single-file, plain canvas charts)
-requirements.txt       Python dependencies
-Dockerfile             python:3.11-slim → uvicorn on :8000
-docker-compose.yml     db + app services, runs `alembic upgrade head` on boot
-.env.example           Template — copy to .env
-.dockerignore          Excludes secrets, caches, legacy files
-```
-
-## Adding products
-
-Use the admin panel at `/admin` — log in, open the **Mahsulotlar** tab,
-click **+ Yangi mahsulot**. New products appear in the cashier dashboard on
-its next page load.
-
-`products.py` is only used for the first-startup seed. Editing it after
-seeding has no effect; the database is the source of truth.
 
 ## Notes
 
-- Basket state lives **in the browser**, not on the server. Refreshing the
-  page clears the basket — same as any cashier "new customer" reset.
-- Money is stored as integer UZS (`BigInteger`) throughout. UZS has no minor
-  unit in practice, so this avoids float / Decimal headaches.
-- Day boundaries in reports are **Tashkent local** (UTC+5, no DST). A sale at
-  23:30 May 14 belongs to May 14's report regardless of UTC.
+- All money amounts are stored as integer UZS — no floats.
+- Day boundaries for leaderboard/reports use Tashkent local time (UTC+5).
+- Re-engagement notifications fire once daily at 10:00 Tashkent time via an asyncio loop; the scheduler runs inside the FastAPI lifespan, no Celery needed.
+- The shop order FSM state is set programmatically from the admin panel (via `StorageKey` + `FSMContext`) so the bot picks up delivery info collection immediately after admin confirms payment.
+- Media files (book covers, question images) are stored under `MEDIA_ROOT` and served at `/media/`.
