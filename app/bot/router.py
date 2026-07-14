@@ -88,26 +88,20 @@ async def _update_user(telegram_id: int, **fields) -> TelegramUser | None:
         return user
 
 
-def _webapp_keyboard() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
+def _main_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(
+                text="🎓 Test ishlash",
+                web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/webapp/"),
+            )],
             [
-                InlineKeyboardButton(
-                    text="🚀 Muslima Darmonovani ochish",
-                    web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/webapp/"),
-                )
+                KeyboardButton(text="📚 Kitoblar do'koni"),
+                KeyboardButton(text="ℹ️ Ma'lumot"),
             ],
-            [
-                InlineKeyboardButton(
-                    text="📚 Kitoblar do'koni",
-                    callback_data="show_shop",
-                ),
-                InlineKeyboardButton(
-                    text="⚙️ Sozlamalar",
-                    web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/webapp/settings"),
-                ),
-            ],
-        ]
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
     )
 
 
@@ -123,13 +117,13 @@ async def _show_main_menu(msg: Message, user: TelegramUser) -> None:
     name = user.first_name or user.username or "Foydalanuvchi"
     text = (
         f"Assalomu alaykum, <b>{name}</b>! 👋\n\n"
-        "📚 <b>Muslima Darmonova bot</b> — bu sizning shaxsiy imtihon tayyorgarlik yordamchingiz.\n\n"
+        "📚 <b>Muslima Darmonova</b> — bu sizning shaxsiy imtihon tayyorgarlik yordamchingiz.\n\n"
         "✅ Mavzular va bo'limlar bo'yicha test yechish\n"
         "📊 Natijalaringizni kuzating\n"
         "🏆 O'z ko'rsatkichlaringizni yaxshilang\n\n"
-        "👇 Boshlash uchun quyidagi tugmani bosing!"
+        "👇 Quyidagi tugmalar orqali boshlang!"
     )
-    await msg.answer(text, reply_markup=_webapp_keyboard())
+    await msg.answer(text, reply_markup=_main_keyboard())
 
 
 @router.message(CommandStart())
@@ -262,6 +256,46 @@ async def change_name_apply(msg: Message, state: FSMContext):
     await _update_user(msg.from_user.id, first_name=first_name, last_name=last_name)
     await state.clear()
     await msg.answer(f"✅ Ism yangilandi: <b>{text}</b>")
+
+
+# ─── Main menu button handlers ────────────────────────────────────────────
+
+@router.message(F.text == "📚 Kitoblar do'koni")
+async def vip_handler(msg: Message):
+    books = await _get_active_books()
+    if not books:
+        await msg.answer(
+            "📚 <b>Kitoblar do'koni</b>\n\nHozircha yangi kitoblar qo'shilmoqda. Tez kunda!\n\n"
+            "Yangiliqlardan xabardor bo'lish uchun botda qoling. 🔔"
+        )
+        return
+    await msg.answer(
+        "📚 <b>Kitoblar do'koni</b>\n\nMavjud kitoblarni ko'rish uchun tugmani bosing 👇",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(
+                    text=f"📖 {b.title} — {_fmt_price(b.price)}",
+                    callback_data=f"book_info:{b.id}",
+                )]
+                for b in books
+            ]
+        ),
+    )
+
+
+@router.message(F.text == "ℹ️ Ma'lumot")
+async def info_handler(msg: Message):
+    await msg.answer(
+        "ℹ️ <b>Muslima Darmonova haqida</b>\n\n"
+        "🎓 Attestatsiyaga tayyorgarlik platformasi\n\n"
+        "✅ Mavzular bo'yicha testlar\n"
+        "🏆 Yutuqli kontestlar\n"
+        "📊 Shaxsiy reyting va tahlil\n"
+        "📚 Attestatsiyaga oid kitoblar\n\n"
+        "📞 Murojaat uchun: @muslima_darmonova\n\n"
+        "🚀 Test ishlash uchun pastdagi tugmani bosing!",
+        reply_markup=_main_keyboard(),
+    )
 
 
 # ─── Shop / Book ordering ─────────────────────────────────────────────────

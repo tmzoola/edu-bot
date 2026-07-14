@@ -89,5 +89,10 @@ def setup_admin(app: FastAPI) -> None:
         icon="fa fa-box-open",
         url="/admin-tools/orders",
     ))
+    admin.add_view(Link(
+        label="Do'kon kitoblari",
+        icon="fa fa-book-open",
+        url="/admin-tools/shop-books",
+    ))
 
     admin.mount_to(app)

@@ -378,6 +378,7 @@ async def books_delete(book_id: int, db: AsyncSession = Depends(get_db)):
 # ═══ Question image upload ═════════════════════════════════════════
 
 QUESTION_IMAGES_DIR = MEDIA_ROOT / QUESTION_IMAGES_DIR_NAME
+SHOP_IMAGES_DIR = MEDIA_ROOT / "shop"
 
 
 @router.post("/upload-image")
@@ -398,6 +399,84 @@ async def upload_image(file: UploadFile = File(...)):
     (MEDIA_ROOT / stored).write_bytes(data)
 
     return {"ok": True, "url": f"/media/{stored}"}
+
+
+@router.post("/upload-shop-image")
+async def upload_shop_image(file: UploadFile = File(...)):
+    """Upload a shop book cover image."""
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_IMAGE_EXT:
+        raise HTTPException(400, f"Rasm turi qo'llab-quvvatlanmaydi: {ext or 'nomaʼlum'}")
+
+    data = await file.read()
+    if len(data) > MAX_IMAGE_SIZE:
+        raise HTTPException(400, "Rasm juda katta (maks. 5 MB)")
+    if not data:
+        raise HTTPException(400, "Rasm bo'sh")
+
+    SHOP_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    stored = f"shop/{uuid.uuid4().hex}{ext}"
+    (MEDIA_ROOT / stored).write_bytes(data)
+
+    return {"ok": True, "url": f"/media/{stored}"}
+
+
+# ─── Shop books custom management page ──────────────────────────────────
+
+@router.get("/shop-books", response_class=HTMLResponse)
+async def shop_books_page(request: Request, db: AsyncSession = Depends(get_db)):
+    books = (
+        await db.execute(select(ShopBook).order_by(ShopBook.order, ShopBook.id))
+    ).scalars().all()
+    return templates.TemplateResponse(
+        "admin_shop_books.html",
+        {"request": request, "books": books},
+    )
+
+
+@router.post("/shop-books/save")
+async def shop_book_save(payload: dict[str, Any], db: AsyncSession = Depends(get_db)):
+    book_id = payload.get("id")
+    title = (payload.get("title") or "").strip()
+    if not title:
+        raise HTTPException(400, "Kitob nomi kiritilmagan")
+
+    price = int(payload.get("price") or 0)
+    description = (payload.get("description") or "").strip() or None
+    cover_image_url = (payload.get("cover_image_url") or "").strip() or None
+    order = int(payload.get("order") or 0)
+    is_active = bool(payload.get("is_active", True))
+
+    if book_id:
+        book = await db.get(ShopBook, int(book_id))
+        if not book:
+            raise HTTPException(404, "Kitob topilmadi")
+        book.title = title
+        book.description = description
+        book.price = price
+        book.cover_image_url = cover_image_url
+        book.order = order
+        book.is_active = is_active
+    else:
+        book = ShopBook(
+            title=title, description=description, price=price,
+            cover_image_url=cover_image_url, order=order, is_active=is_active,
+        )
+        db.add(book)
+
+    await db.commit()
+    await db.refresh(book)
+    return {"ok": True, "id": book.id}
+
+
+@router.delete("/shop-books/{book_id}")
+async def shop_book_delete(book_id: int, db: AsyncSession = Depends(get_db)):
+    book = await db.get(ShopBook, book_id)
+    if not book:
+        raise HTTPException(404, "Kitob topilmadi")
+    await db.delete(book)
+    await db.commit()
+    return {"ok": True}
 
 
 # ═══ Contests (yutuqli test) ════════════════════════════════════════
