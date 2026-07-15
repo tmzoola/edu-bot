@@ -292,7 +292,8 @@ async def info_handler(msg: Message):
         "🏆 Yutuqli kontestlar\n"
         "📊 Shaxsiy reyting va tahlil\n"
         "📚 Attestatsiyaga oid kitoblar\n\n"
-        "📞 Murojaat uchun: @muslima_darmonova\n\n"
+        "📞 Murojaat uchun: @m_darmonova\n"
+        "📚 Kitob admini: @attestatsiya_kitob\n\n"
         "🚀 Test ishlash uchun pastdagi tugmani bosing!",
         reply_markup=_main_keyboard(),
     )
