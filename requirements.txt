@@ -16,3 +16,6 @@ python-dotenv==1.0.1
 
 aiogram==3.15.0
 openpyxl==3.1.5
+
+# Guruh guard boti — 18+ profil aniqlash (NudeNet, lokal)
+nudenet==3.4.2

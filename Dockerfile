@@ -15,6 +15,9 @@ RUN apt-get update \
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
+# Guard boti uchun NudeNet modelini image ichiga oldindan yuklab olish
+RUN python -c "from nudenet import NudeDetector; NudeDetector()"
+
 COPY alembic.ini .
 COPY app/ ./app/
 COPY entrypoint.sh .

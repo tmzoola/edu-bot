@@ -1,4 +1,5 @@
 from models.base import Base
+from models.module import Module
 from models.topic import Topic
 from models.quiz import Quiz
 from models.question import Question, CorrectOption
@@ -8,9 +9,11 @@ from models.book import Book
 from models.contest import Contest, ContestQuestion, ContestAttempt
 from models.quote import MotivationalQuote
 from models.landing import LandingContent
+from models.guard import JoinEvent, FlaggedUser
 
 __all__ = [
     "Base",
+    "Module",
     "Topic",
     "Quiz",
     "Question",
@@ -23,4 +26,6 @@ __all__ = [
     "ContestAttempt",
     "MotivationalQuote",
     "LandingContent",
+    "JoinEvent",
+    "FlaggedUser",
 ]

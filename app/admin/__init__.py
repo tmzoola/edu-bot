@@ -3,6 +3,7 @@ from pathlib import Path
 from admin.auth import AdminAuth
 from admin.i18n_uz import install_uzbek
 from admin.views.book import BookAdminView
+from admin.views.guard import FlaggedUserAdminView, JoinEventAdminView
 from admin.views.landing import LandingContentAdminView
 from admin.views.module import ModuleAdminView
 from admin.views.question import QuestionAdminView
@@ -13,6 +14,7 @@ from admin.views.topic import TopicAdminView
 from db.session import engine
 from fastapi import FastAPI
 from models.book import Book
+from models.guard import FlaggedUser, JoinEvent
 from models.landing import LandingContent
 from models.module import Module
 from models.question import Question
@@ -83,6 +85,10 @@ def setup_admin(app: FastAPI) -> None:
     admin.add_view(ShopSettingsView(ShopSettings, identity="dokon-sozlama"))
     admin.add_view(ShopBookView(ShopBook, identity="dokon-kitob"))
     admin.add_view(BookOrderView(BookOrder, identity="buyurtma"))
+
+    # --- Guruh guard boti jadvallari ---
+    admin.add_view(JoinEventAdminView(JoinEvent, identity="guard-qoshilish"))
+    admin.add_view(FlaggedUserAdminView(FlaggedUser, identity="guard-ogohlantirish"))
 
     admin.add_view(Link(
         label="Buyurtmalar boshqaruvi",

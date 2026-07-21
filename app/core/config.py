@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     BOT_TOKEN: str
     WEBAPP_URL: str = "http://localhost:8000"
 
+    # --- Guruh guard boti (@tozakanal_bot) ---
+    GUARD_BOT_TOKEN: str = "8955731141:AAG29R0HzIvHoPNXGrN4-RhaaHkyZlPFcmM"
+    GUARD_ADMIN_CHAT_ID: int = 765001726
+    NSFW_THRESHOLD: float = 0.6
+
     @property
     def DATABASE_URL(self) -> str:
         return (

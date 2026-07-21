@@ -40,6 +40,27 @@ services:
       retries: 3
       start_period: 30s
 
+  guard:
+    build: .
+    container_name: malaka_guard
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+    working_dir: /project/app
+    # entrypoint.sh (uvicorn) o'rniga guard botni to'g'ridan-to'g'ri ishga tushiramiz
+    entrypoint: ["python", "-m", "guard.main"]
+    volumes:
+      # Flag rasmlari app bilan umumiy media'da (admin panel ko'rsatishi uchun)
+      - media_data:/project/app/media
+    # Image'dagi HEALTHCHECK web server uchun — guard'da web yo'q, o'chiramiz
+    healthcheck:
+      disable: true
+
 volumes:
   postgres_data:
   media_data:
