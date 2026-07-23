@@ -89,6 +89,8 @@ async def record_join(
     tracked_chat_tg_id: int,
     joined_user_tg_id: int,
     invite_link_str: str,
+    joined_username: str | None = None,
+    joined_full_name: str | None = None,
 ) -> JoinResult:
     """Foydalanuvchining ma'lum invite link orqali qo'shilishini yozadi.
 
@@ -141,6 +143,8 @@ async def record_join(
             invite_link_id=invite_link.id,
             joined_user_tg_id=joined_user_tg_id,
             reason="new_account",
+            joined_username=joined_username,
+            joined_full_name=joined_full_name,
         )
         await session.commit()
         return JoinResult(counted=False, reject_reason="new_account")
@@ -162,6 +166,8 @@ async def record_join(
             invite_link_id=invite_link.id,
             joined_user_tg_id=joined_user_tg_id,
             reason="already_member",
+            joined_username=joined_username,
+            joined_full_name=joined_full_name,
         )
         await session.commit()
         return JoinResult(counted=False, reject_reason="already_member")
@@ -177,6 +183,12 @@ async def record_join(
     pending_until = now + timedelta(minutes=settings.MIN_STAY_MINUTES)
 
     if existing is not None:
+        # Yangi identity ma'lumotlari mavjud bo'lsa, har doim yangilaymiz —
+        # foydalanuvchi username yoki ismini o'zgartirgan bo'lishi mumkin.
+        if joined_username is not None:
+            existing.joined_username = joined_username
+        if joined_full_name is not None:
+            existing.joined_full_name = joined_full_name
         if existing.is_counted and existing.left_at is None:
             # Allaqachon a'zo va hisoblangan — hech nima qilmaymiz.
             logger.debug(
@@ -185,6 +197,8 @@ async def record_join(
                 invite_link.id,
                 joined_user_tg_id,
             )
+            if joined_username is not None or joined_full_name is not None:
+                await session.commit()
             return JoinResult(counted=False)
         if existing.pending_until is not None and existing.left_at is None:
             # Grace period davom etmoqda — takroriy update kerak emas.
@@ -194,6 +208,8 @@ async def record_join(
                 invite_link.id,
                 joined_user_tg_id,
             )
+            if joined_username is not None or joined_full_name is not None:
+                await session.commit()
             return JoinResult(counted=False, pending=True)
         # Qaytib qo'shildi — grace period qayta boshlanadi.
         existing.left_at = None
@@ -219,6 +235,8 @@ async def record_join(
         InviteJoin(
             invite_link_id=invite_link.id,
             joined_user_tg_id=joined_user_tg_id,
+            joined_username=joined_username,
+            joined_full_name=joined_full_name,
             left_at=None,
             is_counted=False,
             pending_until=pending_until,
@@ -259,6 +277,8 @@ async def _upsert_rejected(
     invite_link_id: int,
     joined_user_tg_id: int,
     reason: str,
+    joined_username: str | None = None,
+    joined_full_name: str | None = None,
 ) -> None:
     """Rad etilgan join uchun audit yozuvi (is_counted=False, reject_reason)."""
     existing_stmt = select(InviteJoin).where(
@@ -270,11 +290,17 @@ async def _upsert_rejected(
         existing.is_counted = False
         existing.pending_until = None
         existing.reject_reason = reason
+        if joined_username is not None:
+            existing.joined_username = joined_username
+        if joined_full_name is not None:
+            existing.joined_full_name = joined_full_name
         return
     session.add(
         InviteJoin(
             invite_link_id=invite_link_id,
             joined_user_tg_id=joined_user_tg_id,
+            joined_username=joined_username,
+            joined_full_name=joined_full_name,
             left_at=None,
             is_counted=False,
             pending_until=None,

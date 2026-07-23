@@ -117,6 +117,15 @@ class InviteJoin(Base):
     # Qo'shilgan foydalanuvchining Telegram ID'si (bizning users jadvalimizda
     # bo'lmasligi ham mumkin — shu sabab FK emas, BigInteger).
     joined_user_tg_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    # Qo'shilgan foydalanuvchining Telegram username'i (`@` belgisisiz).
+    # NULL bo'lishi mumkin — barcha foydalanuvchilar username o'rnatmaydi.
+    joined_username: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    # Qo'shilgan foydalanuvchining ism-familiyasi (Telegram `full_name`).
+    joined_full_name: Mapped[str | None] = mapped_column(
+        String(256), nullable=True
+    )
     # Foydalanuvchi chatni tark etgan sana (NULL = hozir ham a'zo).
     left_at: Mapped[datetime | None] = mapped_column(
         TIMESTAMP(timezone=True), nullable=True

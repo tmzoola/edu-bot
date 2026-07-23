@@ -172,6 +172,8 @@ class InviteJoinAdminView(BaseAdminView):
         "id",
         HasOne("invite_link", label="Taklif linki", identity="referral-invite-link"),
         IntegerField("joined_user_tg_id", label="Qo'shilgan foydalanuvchi (Telegram ID)", read_only=True),
+        StringField("joined_username", label="Username", read_only=True),
+        StringField("joined_full_name", label="Ism-familiya", read_only=True),
         StringField("createdAt", label="Qo'shilgan sana", read_only=True),
         StringField("left_at", label="Tark etgan sana", read_only=True),
         BooleanField("is_counted", label="Hisoblangan", read_only=True),
@@ -183,13 +185,20 @@ class InviteJoinAdminView(BaseAdminView):
         "id",
         "invite_link",
         "joined_user_tg_id",
+        "joined_username",
+        "joined_full_name",
         "createdAt",
         "left_at",
         "is_counted",
         "pending_until",
         "reject_reason",
     ]
-    column_searchable_list = ["joined_user_tg_id", "reject_reason"]
+    column_searchable_list = [
+        "joined_user_tg_id",
+        "joined_username",
+        "joined_full_name",
+        "reject_reason",
+    ]
     column_sortable_list = [
         "createdAt", "left_at", "is_counted", "pending_until"
     ]

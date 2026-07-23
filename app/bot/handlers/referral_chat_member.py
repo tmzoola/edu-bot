@@ -80,11 +80,17 @@ async def on_chat_member(event: ChatMemberUpdated) -> None:
                     # Foydalanuvchi boshqa yo'l bilan qo'shildi (masalan,
                     # public username, admin qo'shdi va h.k.).
                     return
+                # Foydalanuvchi identity — admin panelda telegram_id'dan
+                # tashqari username/ism-familiya bo'yicha ham topish uchun.
+                full_name = (user.full_name or "").strip() or None
+                username = user.username or None
                 result = await record_join(
                     session,
                     tracked_chat_tg_id=chat.id,
                     joined_user_tg_id=user.id,
                     invite_link_str=invite_link_obj.invite_link,
+                    joined_username=username,
+                    joined_full_name=full_name,
                 )
             else:  # is_leave
                 await record_leave(
