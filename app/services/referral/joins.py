@@ -4,17 +4,29 @@
 yerda joylashgan. `InviteJoin` yozuvi `UNIQUE(invite_link_id, joined_user_tg_id)`
 orqali dublikatlardan himoyalangan, `InviteLink.join_count` esa atomik
 `UPDATE ... SET join_count = join_count + 1` bilan yangilanadi.
+
+T-022 · Anti-fraud MVP:
+  - self-invite ban (avvaldan bor)
+  - min account age (`MIN_TG_USER_ID_FOR_INVITE`) — reject_reason='new_account'
+  - already_member — foydalanuvchi shu chatda boshqa faol join yozuviga ega
+    bo'lsa, reject_reason='already_member'
+  - grace period (`MIN_STAY_MINUTES`) — join darhol hisoblanmaydi, `pending_until`
+    ga vaqt yoziladi; worker (`pending_joins_worker.py`) o'sha muddat o'tgach
+    `is_counted=True` qiladi va `evaluate_user_rewards` chaqiradi.
+  - quick leave — grace period ichida chiqib ketsa, `is_counted=False` qoladi,
+    `reject_reason='quick_leave'` yoziladi.
 """
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from models.referral import InviteJoin, InviteLink, TrackedChat
 from models.rewards import RewardTier
 from models.telegram_user import TelegramUser
@@ -27,17 +39,48 @@ logger = logging.getLogger(__name__)
 class JoinResult:
     """`record_join` natijasi.
 
-    - `counted` — join hisoblanganmi (T-018 semantikasi, avvalgi `bool` qaytim).
-    - `inviter_tg_id` — invite link egasining Telegram ID'si (tabriknoma yuborish uchun).
+    - `counted` — join darhol hisoblanganmi (grace period o'tmaguncha False).
+      Grace period tugagach worker `is_counted=True` qiladi.
+    - `inviter_tg_id` — invite link egasining Telegram ID'si (worker tabriknoma
+      yuborishi uchun; `record_join` darhol biror narsa yubormaydi).
     - `newly_earned_rewards` — shu chaqiruvda yangi qozonilgan reward tier'lari.
+      Grace bilan endi bu doim bo'sh; worker `pending_until` tugagach hisoblaydi.
+    - `pending` — yozuv grace period'da kutmoqdami.
+    - `reject_reason` — rad etilgan bo'lsa, sabab kaliti (masalan `new_account`).
     """
 
     counted: bool
     inviter_tg_id: int | None = None
     newly_earned_rewards: list[RewardTier] = field(default_factory=list)
+    pending: bool = False
+    reject_reason: str | None = None
 
     def __bool__(self) -> bool:  # eski `if await record_join(...)` chaqiruvlar uchun.
-        return self.counted
+        return self.counted or self.pending
+
+
+async def _user_already_in_chat(
+    session: AsyncSession,
+    *,
+    tracked_chat_id: int,
+    joined_user_tg_id: int,
+    exclude_invite_link_id: int | None = None,
+) -> bool:
+    """Foydalanuvchi shu tracked_chat'da boshqa faol InviteJoin'ga egami."""
+    stmt = (
+        select(InviteJoin.id)
+        .join(InviteLink, InviteJoin.invite_link_id == InviteLink.id)
+        .where(
+            InviteLink.tracked_chat_id == tracked_chat_id,
+            InviteJoin.joined_user_tg_id == joined_user_tg_id,
+            InviteJoin.left_at.is_(None),
+        )
+        .limit(1)
+    )
+    if exclude_invite_link_id is not None:
+        stmt = stmt.where(InviteJoin.invite_link_id != exclude_invite_link_id)
+    row = (await session.execute(stmt)).first()
+    return row is not None
 
 
 async def record_join(
@@ -49,16 +92,10 @@ async def record_join(
 ) -> JoinResult:
     """Foydalanuvchining ma'lum invite link orqali qo'shilishini yozadi.
 
-    Args:
-        session: Async DB sessiya (handler boshqaradi).
-        tracked_chat_tg_id: Telegram chat_id (manfiy uzun raqam bo'lishi mumkin).
-        joined_user_tg_id: Yangi a'zoning Telegram ID'si.
-        invite_link_str: Telegram `chat_member` update'idagi `invite_link.invite_link`.
-
-    Returns:
-        `JoinResult` — `counted=True` bo'lsa yangi join yozildi va reward
-        tier'lari (agar bor bo'lsa) `newly_earned_rewards` da qaytariladi.
-        Handler shu ro'yxatni oladi va invite link egasiga tabriknoma yuboradi.
+    T-022'dan boshlab yozuv darhol counted qilinmaydi — `pending_until` ga
+    `MIN_STAY_MINUTES` keyingi vaqt qo'yiladi va background worker
+    (`pending_joins_worker`) grace period tugagach counted'ga o'tkazadi va
+    `evaluate_user_rewards` chaqiradi.
     """
     # 1) TrackedChat + InviteLink birgalikda topamiz.
     stmt = (
@@ -78,6 +115,7 @@ async def record_join(
         )
         return JoinResult(counted=False)
     invite_link: InviteLink = row[0]
+    tracked_chat: TrackedChat = row[1]
 
     # 2) O'z-o'zini invite qilishni bloklash.
     owner = await session.get(TelegramUser, invite_link.user_id)
@@ -87,14 +125,56 @@ async def record_join(
             invite_link.user_id,
             joined_user_tg_id,
         )
-        return JoinResult(counted=False)
+        return JoinResult(counted=False, reject_reason="self_invite")
 
-    # 3) Mavjud InviteJoin yozuvini tekshiramiz (qaytib qo'shilish holati).
+    # 3) T-022 · Min account age (Telegram ID heuristikasi).
+    min_tg_cutoff = settings.MIN_TG_USER_ID_FOR_INVITE
+    if min_tg_cutoff is not None and joined_user_tg_id > min_tg_cutoff:
+        logger.info(
+            "record_join: yangi akkaunt rad etildi "
+            "(tg=%s cutoff=%s)",
+            joined_user_tg_id,
+            min_tg_cutoff,
+        )
+        await _upsert_rejected(
+            session,
+            invite_link_id=invite_link.id,
+            joined_user_tg_id=joined_user_tg_id,
+            reason="new_account",
+        )
+        await session.commit()
+        return JoinResult(counted=False, reject_reason="new_account")
+
+    # 4) T-022 · Foydalanuvchi shu chatda boshqa link orqali allaqachon a'zomi?
+    if await _user_already_in_chat(
+        session,
+        tracked_chat_id=tracked_chat.id,
+        joined_user_tg_id=joined_user_tg_id,
+        exclude_invite_link_id=invite_link.id,
+    ):
+        logger.info(
+            "record_join: allaqachon shu chatda a'zo (chat=%s tg=%s)",
+            tracked_chat.id,
+            joined_user_tg_id,
+        )
+        await _upsert_rejected(
+            session,
+            invite_link_id=invite_link.id,
+            joined_user_tg_id=joined_user_tg_id,
+            reason="already_member",
+        )
+        await session.commit()
+        return JoinResult(counted=False, reject_reason="already_member")
+
+    # 5) Mavjud InviteJoin yozuvini tekshiramiz (qaytib qo'shilish holati).
     existing_stmt = select(InviteJoin).where(
         InviteJoin.invite_link_id == invite_link.id,
         InviteJoin.joined_user_tg_id == joined_user_tg_id,
     )
     existing = (await session.execute(existing_stmt)).scalar_one_or_none()
+
+    now = datetime.now(timezone.utc)
+    pending_until = now + timedelta(minutes=settings.MIN_STAY_MINUTES)
 
     if existing is not None:
         if existing.is_counted and existing.left_at is None:
@@ -106,30 +186,43 @@ async def record_join(
                 joined_user_tg_id,
             )
             return JoinResult(counted=False)
-        # Qaytib qo'shildi — reactivate.
+        if existing.pending_until is not None and existing.left_at is None:
+            # Grace period davom etmoqda — takroriy update kerak emas.
+            logger.debug(
+                "record_join: dublikat, pending "
+                "(invite_link_id=%s tg=%s)",
+                invite_link.id,
+                joined_user_tg_id,
+            )
+            return JoinResult(counted=False, pending=True)
+        # Qaytib qo'shildi — grace period qayta boshlanadi.
         existing.left_at = None
-        existing.is_counted = True
-        await _increment_join_count(session, invite_link.id)
-        new_rewards = await evaluate_user_rewards(session, invite_link.user_id)
+        existing.is_counted = False
+        existing.pending_until = pending_until
+        existing.reject_reason = None
         await session.commit()
         logger.info(
-            "record_join: qayta qo'shildi (invite_link_id=%s tg=%s)",
+            "record_join: qayta qo'shildi (pending) "
+            "(invite_link_id=%s tg=%s pending_until=%s)",
             invite_link.id,
             joined_user_tg_id,
+            pending_until.isoformat(),
         )
         return JoinResult(
-            counted=True,
+            counted=False,
+            pending=True,
             inviter_tg_id=owner.telegram_id if owner is not None else None,
-            newly_earned_rewards=new_rewards,
         )
 
-    # 4) Yangi InviteJoin.
+    # 6) Yangi InviteJoin — grace period bilan pending.
     session.add(
         InviteJoin(
             invite_link_id=invite_link.id,
             joined_user_tg_id=joined_user_tg_id,
             left_at=None,
-            is_counted=True,
+            is_counted=False,
+            pending_until=pending_until,
+            reject_reason=None,
         )
     )
     try:
@@ -145,19 +238,53 @@ async def record_join(
         )
         return JoinResult(counted=False)
 
-    await _increment_join_count(session, invite_link.id)
-    new_rewards = await evaluate_user_rewards(session, invite_link.user_id)
     await session.commit()
     logger.info(
-        "record_join: yangi join yozildi (invite_link_id=%s tg=%s)",
+        "record_join: yangi join pending (invite_link_id=%s tg=%s "
+        "pending_until=%s)",
         invite_link.id,
         joined_user_tg_id,
+        pending_until.isoformat(),
     )
     return JoinResult(
-        counted=True,
+        counted=False,
+        pending=True,
         inviter_tg_id=owner.telegram_id if owner is not None else None,
-        newly_earned_rewards=new_rewards,
     )
+
+
+async def _upsert_rejected(
+    session: AsyncSession,
+    *,
+    invite_link_id: int,
+    joined_user_tg_id: int,
+    reason: str,
+) -> None:
+    """Rad etilgan join uchun audit yozuvi (is_counted=False, reject_reason)."""
+    existing_stmt = select(InviteJoin).where(
+        InviteJoin.invite_link_id == invite_link_id,
+        InviteJoin.joined_user_tg_id == joined_user_tg_id,
+    )
+    existing = (await session.execute(existing_stmt)).scalar_one_or_none()
+    if existing is not None:
+        existing.is_counted = False
+        existing.pending_until = None
+        existing.reject_reason = reason
+        return
+    session.add(
+        InviteJoin(
+            invite_link_id=invite_link_id,
+            joined_user_tg_id=joined_user_tg_id,
+            left_at=None,
+            is_counted=False,
+            pending_until=None,
+            reject_reason=reason,
+        )
+    )
+    try:
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
 
 
 async def record_leave(
@@ -169,8 +296,13 @@ async def record_leave(
     """Foydalanuvchining chatdan chiqishini barcha mos InviteJoin'larda belgilaydi.
 
     Bitta foydalanuvchi bir vaqtda faqat bitta invite link orqali kelgan bo'ladi,
-    lekin nazariy jihatdan bir necha `is_counted=True` yozuvlar bo'lishi mumkin
-    (masalan, tarixiy migratsiyalardan) — barchasini decrement qilamiz.
+    lekin nazariy jihatdan bir necha yozuv bo'lishi mumkin (masalan, tarixiy
+    migratsiyalardan) — barchasini yopamiz.
+
+    T-022 · Grace period ichida chiqib ketilsa (`pending_until IS NOT NULL`),
+    yozuv counted holatiga o'tmagan bo'ladi, shuning uchun join_count kamaymaydi
+    — faqat `reject_reason='quick_leave'` qo'yiladi va `pending_until` tozalanadi
+    (worker uni endi qayta ko'rmaydi).
     """
     stmt = (
         select(InviteJoin, InviteLink)
@@ -195,10 +327,14 @@ async def record_leave(
     now = datetime.now(timezone.utc)
     for join, invite_link in rows:
         was_counted = join.is_counted
+        was_pending = join.pending_until is not None
         join.left_at = now
         join.is_counted = False
+        join.pending_until = None
         if was_counted:
             await _decrement_join_count(session, invite_link.id)
+        elif was_pending and join.reject_reason is None:
+            join.reject_reason = "quick_leave"
     await session.commit()
     logger.info(
         "record_leave: %d ta InviteJoin yopildi (chat_tg=%s tg=%s)",

@@ -175,6 +175,8 @@ class InviteJoinAdminView(BaseAdminView):
         StringField("createdAt", label="Qo'shilgan sana", read_only=True),
         StringField("left_at", label="Tark etgan sana", read_only=True),
         BooleanField("is_counted", label="Hisoblangan", read_only=True),
+        StringField("pending_until", label="Grace tugash sanasi", read_only=True),
+        StringField("reject_reason", label="Rad etish sababi", read_only=True),
     ]
 
     column_list = [
@@ -184,9 +186,15 @@ class InviteJoinAdminView(BaseAdminView):
         "createdAt",
         "left_at",
         "is_counted",
+        "pending_until",
+        "reject_reason",
     ]
-    column_searchable_list = ["joined_user_tg_id"]
-    column_sortable_list = ["createdAt", "left_at", "is_counted"]
+    column_searchable_list = ["joined_user_tg_id", "reject_reason"]
+    column_sortable_list = [
+        "createdAt", "left_at", "is_counted", "pending_until"
+    ]
+    # T-022 · Admin `is_counted` bo'yicha filtrlashi uchun oddiy boolean filter.
+    column_filters = ["is_counted"]
     fields_default_sort = [("createdAt", True)]
 
     def can_create(self, request: Request) -> bool:

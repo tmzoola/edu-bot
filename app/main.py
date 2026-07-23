@@ -73,13 +73,20 @@ async def lifespan(app: FastAPI):
     reengagement_task = asyncio.create_task(_reengagement_loop())
     logger.info("✅ Reengagement scheduler started")
 
+    # T-022 · Referral anti-fraud grace period worker.
+    from services.referral.pending_joins_worker import pending_joins_loop
+
+    pending_joins_task = asyncio.create_task(pending_joins_loop())
+    logger.info("✅ Pending joins worker started")
+
     yield
 
     # Graceful shutdown
     logger.info("🔴 Shutting down...")
+    pending_joins_task.cancel()
     reengagement_task.cancel()
     polling_task.cancel()
-    for task in (polling_task, reengagement_task):
+    for task in (polling_task, reengagement_task, pending_joins_task):
         try:
             await task
         except asyncio.CancelledError:

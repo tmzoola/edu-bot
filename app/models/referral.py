@@ -125,6 +125,16 @@ class InviteJoin(Base):
     is_counted: Mapped[bool] = mapped_column(
         Boolean, default=True, server_default="true"
     )
+    # T-022 · Anti-fraud: grace period tugaydigan vaqt. NULL bo'lsa allaqachon
+    # yakuniy holatda (counted yoki rad etilgan). Worker bu ustunni scan qiladi.
+    pending_until: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True, index=True
+    )
+    # T-022 · Anti-fraud rad etish sababi (masalan `new_account`,
+    # `already_member`, `quick_leave`, `self_invite`). NULL bo'lsa rad etilmagan.
+    reject_reason: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
 
     invite_link: Mapped["InviteLink"] = relationship(
         "InviteLink", back_populates="joins", lazy="select"
