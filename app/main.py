@@ -63,9 +63,11 @@ async def lifespan(app: FastAPI):
     setup_admin(app)
 
     # Start Telegram bot polling
-    from bot.setup import bot, dp
+    from bot.setup import ALLOWED_UPDATES, bot, dp
 
-    polling_task = asyncio.create_task(dp.start_polling(bot, skip_updates=True))
+    polling_task = asyncio.create_task(
+        dp.start_polling(bot, skip_updates=True, allowed_updates=ALLOWED_UPDATES)
+    )
     logger.info("✅ Bot polling started")
 
     reengagement_task = asyncio.create_task(_reengagement_loop())

@@ -10,6 +10,7 @@ from models.contest import Contest, ContestQuestion, ContestAttempt
 from models.quote import MotivationalQuote
 from models.landing import LandingContent
 from models.guard import JoinEvent, FlaggedUser
+from models.referral import TrackedChat, InviteLink, InviteJoin
 
 __all__ = [
     "Base",
@@ -28,4 +29,7 @@ __all__ = [
     "LandingContent",
     "JoinEvent",
     "FlaggedUser",
+    "TrackedChat",
+    "InviteLink",
+    "InviteJoin",
 ]

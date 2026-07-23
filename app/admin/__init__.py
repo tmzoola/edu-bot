@@ -8,6 +8,13 @@ from admin.views.landing import LandingContentAdminView
 from admin.views.module import ModuleAdminView
 from admin.views.question import QuestionAdminView
 from admin.views.quiz import QuizAdminView
+from admin.views.referral import (
+    InviteJoinAdminView,
+    InviteLinkAdminView,
+    RewardTierAdminView,
+    TrackedChatAdminView,
+    UserRewardAdminView,
+)
 from admin.views.shop import BookOrderView, ShopBookView, ShopSettingsView
 from admin.views.telegram_user import TelegramUserAdminView
 from admin.views.topic import TopicAdminView
@@ -19,6 +26,8 @@ from models.landing import LandingContent
 from models.module import Module
 from models.question import Question
 from models.quiz import Quiz
+from models.referral import InviteJoin, InviteLink, TrackedChat
+from models.rewards import RewardTier, UserReward
 from models.shop import BookOrder, ShopBook, ShopSettings
 from models.telegram_user import TelegramUser
 from models.topic import Topic
@@ -89,6 +98,22 @@ def setup_admin(app: FastAPI) -> None:
     # --- Guruh guard boti jadvallari ---
     admin.add_view(JoinEventAdminView(JoinEvent, identity="guard-qoshilish"))
     admin.add_view(FlaggedUserAdminView(FlaggedUser, identity="guard-ogohlantirish"))
+
+    # --- Referral (taklif) tizimi ---
+    admin.add_view(TrackedChatAdminView(TrackedChat, identity="referral-tracked-chat"))
+    admin.add_view(InviteLinkAdminView(InviteLink, identity="referral-invite-link"))
+    admin.add_view(InviteJoinAdminView(InviteJoin, identity="referral-invite-join"))
+    admin.add_view(
+        RewardTierAdminView(RewardTier, identity="referral-reward-tier")
+    )
+    admin.add_view(
+        UserRewardAdminView(UserReward, identity="referral-user-reward")
+    )
+    admin.add_view(Link(
+        label="Referral: Top inviterlar",
+        icon="fa fa-user-plus",
+        url="/admin-tools/referral-leaderboard",
+    ))
 
     admin.add_view(Link(
         label="Buyurtmalar boshqaruvi",

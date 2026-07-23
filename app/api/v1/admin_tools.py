@@ -1113,3 +1113,106 @@ async def order_ship(order_id: int, payload: dict[str, Any], db: AsyncSession = 
         logger.exception("Failed to notify user %s after ship", order.user.telegram_id)
 
     return {"ok": True}
+
+
+# ═══ Referral: Top inviters (T-020) ═══════════════════════════════════
+
+@router.get("/referral-leaderboard", response_class=HTMLResponse)
+async def referral_leaderboard_page(
+    request: Request,
+    tracked_chat_id: int | None = None,
+    q: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin panel: eng ko'p taklif qilgan foydalanuvchilar reytingi."""
+    from services.referral.rankings import (
+        get_active_tracked_chats,
+        get_top_inviters,
+    )
+
+    chats = await get_active_tracked_chats(db)
+    rows = await get_top_inviters(
+        db,
+        limit=500,
+        offset=0,
+        tracked_chat_id=tracked_chat_id,
+        search=q,
+    )
+
+    return templates.TemplateResponse(
+        "admin_referral_leaderboard.html",
+        {
+            "request": request,
+            "rows": rows,
+            "chats": chats,
+            "selected_chat_id": tracked_chat_id,
+            "search": q or "",
+        },
+    )
+
+
+@router.get("/referral-leaderboard/export")
+async def referral_leaderboard_export(
+    tracked_chat_id: int | None = None,
+    q: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Top inviterlar reytingini .xlsx sifatida yuklab olish."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    from services.referral.rankings import get_top_inviters
+
+    rows = await get_top_inviters(
+        db,
+        limit=10000,
+        offset=0,
+        tracked_chat_id=tracked_chat_id,
+        search=q,
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Top inviterlar"
+
+    headers = [
+        "O'rin", "User ID", "Telegram ID", "Ism Familya", "Username",
+        "Umumiy taklif", "Chatlar soni",
+    ]
+    ws.append(headers)
+
+    header_fill = PatternFill(start_color="6C63F6", end_color="6C63F6", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for r in rows:
+        ws.append([
+            r.rank,
+            r.user_id,
+            r.telegram_id,
+            r.full_name,
+            r.username or "",
+            r.total_invites,
+            r.active_chats,
+        ])
+
+    widths = [6, 10, 16, 28, 20, 14, 14]
+    for col, w in enumerate(widths, start=1):
+        ws.column_dimensions[chr(64 + col)].width = w
+
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    suffix = f"_chat{tracked_chat_id}" if tracked_chat_id else ""
+    filename = f"top_inviterlar{suffix}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

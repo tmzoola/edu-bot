@@ -13,6 +13,8 @@ from models.attempt import QuizAttempt  # noqa: F401
 from models.book import Book  # noqa: F401
 from models.contest import Contest, ContestAttempt, ContestQuestion  # noqa: F401
 from models.guard import FlaggedUser, JoinEvent  # noqa: F401
+from models.referral import InviteJoin, InviteLink, TrackedChat  # noqa: F401
+from models.rewards import RewardTier, UserReward  # noqa: F401
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config

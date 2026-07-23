@@ -99,6 +99,7 @@ def _main_keyboard() -> ReplyKeyboardMarkup:
                 KeyboardButton(text="📚 Kitoblar do'koni"),
                 KeyboardButton(text="ℹ️ Ma'lumot"),
             ],
+            [KeyboardButton(text="🔗 Taklif linki")],
         ],
         resize_keyboard=True,
         is_persistent=True,
