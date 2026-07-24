@@ -6,6 +6,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from bot.handlers import (
     referral_admin_events_router,
     referral_chat_member_router,
+    referral_event_router,
     referral_menu_router,
 )
 from bot.middlewares import BlacklistMiddleware
@@ -26,6 +27,8 @@ dp.include_router(referral_admin_events_router)
 dp.include_router(referral_chat_member_router)
 # Referral: "🔗 Taklif linki" tugmasi va chat tanlash inline flow (T-017).
 dp.include_router(referral_menu_router)
+# Referral konkurs: "✅ Obuna bo'ldim" a'zolik gate va shaxsiy linklar.
+dp.include_router(referral_event_router)
 
 # Malaka bot uchun standart update ro'yxati (`getUpdates` chaqiruvida yuboriladi).
 # `my_chat_member` T-015 uchun majburiy; `chat_member` T-018 (join tracking)

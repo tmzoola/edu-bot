@@ -6,16 +6,26 @@ Barcha view'lar ko'p jihatdan **read-only** — invite linklar va qo'shilish
 hodisalari faqat Telegram / bot service tomonidan yaratiladi. TrackedChat
 uchun faqat `is_active` toggle qilinishi mumkin.
 """
+import uuid
+from pathlib import Path
+from typing import Any
+
 from admin.views.base import BaseAdminView
+from core.config import ALLOWED_IMAGE_EXT, MAX_IMAGE_SIZE, MEDIA_ROOT
 from starlette.requests import Request
 from starlette_admin import (
     BooleanField,
     DateTimeField,
+    FileField,
     HasOne,
     IntegerField,
     StringField,
     TextAreaField,
 )
+from starlette_admin.exceptions import FormValidationError
+
+# Konkurs e'lon rasmlari MEDIA_ROOT ichida shu papkaga saqlanadi.
+REFERRAL_EVENTS_DIR_NAME = "referral_events"
 
 
 class TrackedChatAdminView(BaseAdminView):
@@ -29,6 +39,13 @@ class TrackedChatAdminView(BaseAdminView):
         StringField("title", label="Nomi", read_only=True),
         StringField("type", label="Turi", read_only=True),
         StringField("username", label="Username", read_only=True),
+        StringField(
+            "invite_url",
+            label="Qo'shilish havolasi (private uchun)",
+            required=False,
+            help_text="Private kanal/guruh uchun doimiy invite link. "
+            "Public bo'lsa username'dan avtomatik olinadi.",
+        ),
         BooleanField("is_active", label="Faol"),
         "createdAt",
         "updatedAt",
@@ -40,6 +57,7 @@ class TrackedChatAdminView(BaseAdminView):
         "title",
         "type",
         "username",
+        "invite_url",
         "is_active",
         "createdAt",
         "updatedAt",
@@ -160,6 +178,153 @@ class UserRewardAdminView(BaseAdminView):
     fields_default_sort = [("earned_at", True)]
 
     def can_create(self, request: Request) -> bool:
+        return False
+
+
+class ReferralEventAdminView(BaseAdminView):
+    """Referral konkurs (event) CRUD — admin e'lonni sozlaydi."""
+
+    name = "Referral konkurs"
+    label = "Referral: konkurslar"
+    icon = "fa fa-bullhorn"
+
+    fields = [
+        "id",
+        StringField("title", label="Sarlavha", required=True),
+        TextAreaField(
+            "announcement_text",
+            label="E'lon matni",
+            required=True,
+        ),
+        FileField(
+            "image_upload",
+            label="E'lon rasmi (ixtiyoriy)",
+            help_text="PNG, JPG, JPEG, WEBP, GIF · maks. 5 MB",
+            exclude_from_list=True,
+            exclude_from_detail=True,
+        ),
+        StringField(
+            "image_url",
+            label="Joriy rasm",
+            read_only=True,
+            exclude_from_create=True,
+        ),
+        TextAreaField(
+            "success_text",
+            label="Chipta xabari sarlavhasi (ixtiyoriy)",
+            required=False,
+        ),
+        DateTimeField("starts_at", label="Boshlanish vaqti", required=True),
+        DateTimeField("ends_at", label="Tugash vaqti", required=True),
+        BooleanField("is_active", label="Faol"),
+        "createdAt",
+        "updatedAt",
+    ]
+
+    column_list = [
+        "id",
+        "title",
+        "starts_at",
+        "ends_at",
+        "is_active",
+        "createdAt",
+    ]
+    column_searchable_list = ["title"]
+    column_sortable_list = ["starts_at", "ends_at", "is_active", "createdAt"]
+    fields_default_sort = [("starts_at", True)]
+
+    # ── rasm yuklash (book.py pattern) ──────────────────────────────
+
+    async def _store_image(self, obj: Any, upload: Any) -> None:
+        ext = Path(upload.filename or "").suffix.lower()
+        if ext not in ALLOWED_IMAGE_EXT:
+            raise FormValidationError(
+                {"image_upload": f"Rasm turi qo'llab-quvvatlanmaydi: {ext or 'nomaʼlum'}"}
+            )
+        data = await upload.read()
+        if not data:
+            raise FormValidationError({"image_upload": "Fayl bo'sh"})
+        if len(data) > MAX_IMAGE_SIZE:
+            raise FormValidationError({"image_upload": "Rasm juda katta (maks. 5 MB)"})
+
+        images_dir = MEDIA_ROOT / REFERRAL_EVENTS_DIR_NAME
+        images_dir.mkdir(parents=True, exist_ok=True)
+        stored = f"{REFERRAL_EVENTS_DIR_NAME}/{uuid.uuid4().hex}{ext}"
+        (MEDIA_ROOT / stored).write_bytes(data)
+
+        old = getattr(obj, "image_url", None)
+        obj.image_url = stored
+        if old and old != stored and not old.startswith(("http://", "https://")):
+            try:
+                (MEDIA_ROOT / old).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+    @staticmethod
+    def _extract_upload(data: dict) -> Any:
+        raw = data.get("image_upload")
+        upload = raw[0] if isinstance(raw, tuple) else raw
+        if upload is not None and getattr(upload, "filename", ""):
+            return upload
+        return None
+
+    async def _populate_obj(
+        self, request: Request, obj: Any, data: dict, is_edit: bool = False
+    ) -> Any:
+        obj = await super()._populate_obj(request, obj, data, is_edit)
+        upload = self._extract_upload(data)
+        if upload is not None:
+            await self._store_image(obj, upload)
+        # `image_upload` — virtual maydon; super() qo'ygan xom UploadFile'ni olib tashlaymiz.
+        if hasattr(obj, "image_upload"):
+            try:
+                delattr(obj, "image_upload")
+            except AttributeError:
+                pass
+        return obj
+
+    async def delete(self, request: Request, pks: list) -> int | None:
+        for pk in pks:
+            obj = await self.find_by_pk(request, pk)
+            img = getattr(obj, "image_url", None) if obj else None
+            if img and not img.startswith(("http://", "https://")):
+                try:
+                    (MEDIA_ROOT / img).unlink(missing_ok=True)
+                except OSError:
+                    pass
+        return await super().delete(request, pks)
+
+
+class ReferralEventParticipantAdminView(BaseAdminView):
+    """Referral konkurs ishtirokchilari — read-only."""
+
+    name = "Konkurs ishtirokchisi"
+    label = "Referral: konkurs ishtirokchilari"
+    icon = "fa fa-users"
+
+    fields = [
+        "id",
+        HasOne("event", label="Konkurs", identity="referral-event"),
+        HasOne("user", label="Foydalanuvchi", identity="foydalanuvchi"),
+        IntegerField("number", label="Ishtirokchi №", read_only=True),
+        "createdAt",
+    ]
+
+    column_list = [
+        "id",
+        "event",
+        "user",
+        "number",
+        "createdAt",
+    ]
+    column_searchable_list = ["number"]
+    column_sortable_list = ["number", "createdAt"]
+    fields_default_sort = [("createdAt", True)]
+
+    def can_create(self, request: Request) -> bool:
+        return False
+
+    def can_edit(self, request: Request) -> bool:
         return False
 
 

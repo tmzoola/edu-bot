@@ -9,6 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     CallbackQuery,
+    FSInputFile,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     KeyboardButton,
@@ -19,10 +20,15 @@ from aiogram.types import (
 )
 from sqlalchemy import select
 
-from core.config import settings
+from core.config import MEDIA_ROOT, settings
 from db.session import session_factory
 from models.shop import BookOrder, OrderStatus, ShopBook, ShopSettings
 from models.telegram_user import TelegramUser
+from services.referral.events import (
+    announcement_keyboard,
+    get_active_event,
+    get_active_tracked_chats,
+)
 
 _TZ = ZoneInfo("Asia/Tashkent")
 
@@ -127,6 +133,61 @@ async def _show_main_menu(msg: Message, user: TelegramUser) -> None:
     await msg.answer(text, reply_markup=_main_keyboard())
 
 
+def _resolve_event_photo(image_url: str | None):
+    """Event rasmini `answer_photo` uchun tayyorlaydi.
+
+    - Bo'sh bo'lsa None.
+    - http(s):// bilan boshlansa — URL string o'zi.
+    - Aks holda MEDIA_ROOT ichidagi yuklangan fayl — `FSInputFile`.
+    """
+    if not image_url:
+        return None
+    if image_url.startswith(("http://", "https://")):
+        return image_url
+    path = MEDIA_ROOT / image_url
+    if path.exists():
+        return FSInputFile(str(path))
+    logger.warning("event rasmi topilmadi: %s", path)
+    return None
+
+
+async def _maybe_show_event(msg: Message) -> bool:
+    """Faol referral event bo'lsa e'lonni ko'rsatadi. True — ko'rsatildi.
+
+    E'lon: rasm (bor bo'lsa) + matn + inline kanal/guruh tugmalari va
+    "✅ Obuna bo'ldim". So'ng asosiy reply keyboard qayta o'rnatiladi, shunda
+    Test/Kitoblar/Ma'lumot/Taklif linki tugmalari o'zgarishsiz qoladi.
+    """
+    now = datetime.now(_TZ)
+    async with session_factory() as session:
+        event = await get_active_event(session, now)
+        if event is None:
+            return False
+        chats = await get_active_tracked_chats(session)
+
+    kb = announcement_keyboard(chats)
+    photo = _resolve_event_photo(event.image_url)
+    if photo is not None:
+        try:
+            await msg.answer_photo(
+                photo,
+                caption=event.announcement_text,
+                reply_markup=kb,
+            )
+        except Exception:
+            logger.exception("event rasmini yuborib bo'lmadi: event_id=%s", event.id)
+            await msg.answer(event.announcement_text, reply_markup=kb)
+    else:
+        await msg.answer(event.announcement_text, reply_markup=kb)
+
+    # Asosiy menyu tugmalarini (reply keyboard) qayta o'rnatamiz.
+    await msg.answer(
+        "👇 Quyidagi tugmalar orqali boshlang!",
+        reply_markup=_main_keyboard(),
+    )
+    return True
+
+
 @router.message(CommandStart())
 async def start_handler(msg: Message, state: FSMContext):
     await state.clear()
@@ -139,6 +200,9 @@ async def start_handler(msg: Message, state: FSMContext):
             reply_markup=_contact_keyboard(),
         )
         await state.set_state(Register.phone)
+        return
+
+    if await _maybe_show_event(msg):
         return
 
     await _show_main_menu(msg, user)

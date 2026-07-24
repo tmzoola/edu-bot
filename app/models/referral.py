@@ -36,6 +36,10 @@ class TrackedChat(Base):
     # channel | group | supergroup
     type: Mapped[str] = mapped_column(String(32))
     username: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Konkurs e'lonidagi "qo'shilish" tugmasi uchun havola. Public chatda
+    # `username`dan `t.me/...` olinadi; private chat uchun admin shu yerga
+    # doimiy invite link qo'yadi. NULL bo'lsa faqat `username`ga tayaniladi.
+    invite_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
     invite_links: Mapped[list["InviteLink"]] = relationship(

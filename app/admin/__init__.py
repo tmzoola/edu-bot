@@ -11,6 +11,8 @@ from admin.views.quiz import QuizAdminView
 from admin.views.referral import (
     InviteJoinAdminView,
     InviteLinkAdminView,
+    ReferralEventAdminView,
+    ReferralEventParticipantAdminView,
     RewardTierAdminView,
     TrackedChatAdminView,
     UserRewardAdminView,
@@ -27,6 +29,7 @@ from models.module import Module
 from models.question import Question
 from models.quiz import Quiz
 from models.referral import InviteJoin, InviteLink, TrackedChat
+from models.referral_event import ReferralEvent, ReferralEventParticipant
 from models.rewards import RewardTier, UserReward
 from models.shop import BookOrder, ShopBook, ShopSettings
 from models.telegram_user import TelegramUser
@@ -100,6 +103,14 @@ def setup_admin(app: FastAPI) -> None:
     admin.add_view(FlaggedUserAdminView(FlaggedUser, identity="guard-ogohlantirish"))
 
     # --- Referral (taklif) tizimi ---
+    admin.add_view(
+        ReferralEventAdminView(ReferralEvent, identity="referral-event")
+    )
+    admin.add_view(
+        ReferralEventParticipantAdminView(
+            ReferralEventParticipant, identity="referral-event-participant"
+        )
+    )
     admin.add_view(TrackedChatAdminView(TrackedChat, identity="referral-tracked-chat"))
     admin.add_view(InviteLinkAdminView(InviteLink, identity="referral-invite-link"))
     admin.add_view(InviteJoinAdminView(InviteJoin, identity="referral-invite-join"))
