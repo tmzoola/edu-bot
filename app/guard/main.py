@@ -30,11 +30,32 @@ async def _ensure_tables() -> None:
             Base.metadata.create_all,
             tables=[JoinEvent.__table__, FlaggedUser.__table__],
         )
-        # Eski o'rnatishlar uchun keyin qo'shilgan ustunlar (idempotent)
-        await conn.execute(text(
+        # Eski o'rnatishlar uchun keyin qo'shilgan ustunlar (idempotent).
+        # `create_all` mavjud jadvalga yangi ustun qo'shmaydi — shuning uchun
+        # NSFW/flag ustunlarini qo'lda ADD COLUMN IF NOT EXISTS qilamiz, aks
+        # holda admin panel so'rovi (masalan `nsfw_score`) 500 beradi.
+        _patches = [
+            "ALTER TABLE guard_join_events "
+            "ADD COLUMN IF NOT EXISTS has_photo BOOLEAN NOT NULL DEFAULT false",
+            "ALTER TABLE guard_join_events "
+            "ADD COLUMN IF NOT EXISTS nsfw_score DOUBLE PRECISION NOT NULL DEFAULT 0",
+            "ALTER TABLE guard_join_events "
+            "ADD COLUMN IF NOT EXISTS flagged BOOLEAN NOT NULL DEFAULT false",
             "ALTER TABLE guard_flagged_users "
-            "ADD COLUMN IF NOT EXISTS photo_path VARCHAR(512)"
-        ))
+            "ADD COLUMN IF NOT EXISTS nsfw_score DOUBLE PRECISION NOT NULL DEFAULT 0",
+            "ALTER TABLE guard_flagged_users "
+            "ADD COLUMN IF NOT EXISTS reasons TEXT NOT NULL DEFAULT ''",
+            "ALTER TABLE guard_flagged_users "
+            "ADD COLUMN IF NOT EXISTS photo_path VARCHAR(512)",
+            "ALTER TABLE guard_flagged_users "
+            "ADD COLUMN IF NOT EXISTS action VARCHAR(16) NOT NULL DEFAULT 'pending'",
+            "ALTER TABLE guard_flagged_users "
+            "ADD COLUMN IF NOT EXISTS decided_by VARCHAR(256)",
+            "ALTER TABLE guard_flagged_users "
+            "ADD COLUMN IF NOT EXISTS decided_at TIMESTAMP WITH TIME ZONE",
+        ]
+        for stmt in _patches:
+            await conn.execute(text(stmt))
 
 
 async def main() -> None:
