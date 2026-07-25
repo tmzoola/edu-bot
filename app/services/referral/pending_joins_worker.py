@@ -16,12 +16,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.session import session_factory
+from models.base import TASHKENT_TZ
 from models.referral import InviteJoin, InviteLink
 from models.rewards import RewardTier
 from models.telegram_user import TelegramUser
@@ -81,7 +82,7 @@ async def scan_pending_joins_once() -> list[tuple[int, list[RewardTier]]]:
         juftliklari ro'yxati.
     """
     notifications: list[tuple[int, list[RewardTier]]] = []
-    now = datetime.now(timezone.utc)
+    now = datetime.now(TASHKENT_TZ)
 
     async with session_factory() as session:
         stmt = (

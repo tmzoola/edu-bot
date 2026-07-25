@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from models.base import Base
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON
+from sqlalchemy import ForeignKey, Integer, JSON, TIMESTAMP
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
@@ -19,7 +19,9 @@ class QuizAttempt(Base):
     time_taken_seconds: Mapped[int] = mapped_column(Integer, default=0)
     # {str(question_id): "A"/"B"/"C"/"D"}
     answers: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
 
     user: Mapped["TelegramUser"] = relationship("TelegramUser")
     quiz: Mapped["Quiz"] = relationship("Quiz")

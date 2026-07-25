@@ -75,12 +75,7 @@ document.getElementById('save').addEventListener('click', async () => {
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.detail || 'Xatolik');
-        // update cache
-        try {
-            const u = JSON.parse(sessionStorage.getItem('mk_user') || '{}');
-            u.first_name = d.first_name; u.last_name = d.last_name;
-            sessionStorage.setItem('mk_user', JSON.stringify(u));
-        } catch(e){}
+        if (MK.user) { MK.user.first_name = d.first_name; MK.user.last_name = d.last_name; }
         MK.haptic('success');
         showMsg('ok', "✅ Saqlandi");
     } catch(e){

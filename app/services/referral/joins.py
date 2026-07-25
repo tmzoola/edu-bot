@@ -20,13 +20,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
+from models.base import TASHKENT_TZ
 from models.referral import InviteJoin, InviteLink, TrackedChat
 from models.rewards import RewardTier
 from models.telegram_user import TelegramUser
@@ -179,7 +180,7 @@ async def record_join(
     )
     existing = (await session.execute(existing_stmt)).scalar_one_or_none()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(TASHKENT_TZ)
     pending_until = now + timedelta(minutes=settings.MIN_STAY_MINUTES)
 
     if existing is not None:
@@ -350,7 +351,7 @@ async def record_leave(
         )
         return
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(TASHKENT_TZ)
     for join, invite_link in rows:
         was_counted = join.is_counted
         was_pending = join.pending_until is not None

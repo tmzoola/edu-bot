@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from admin.views.base import BaseAdminView
+from models.base import TASHKENT_TZ
 from aiogram import Bot
 from core.config import settings
 from starlette.requests import Request
@@ -87,6 +88,6 @@ class FlaggedUserAdminView(BaseAdminView):
         session = request.state.session
         row.action = "banned"
         row.decided_by = request.session.get("username", "admin-panel")
-        row.decided_at = dt.datetime.now(dt.timezone.utc)
+        row.decided_at = dt.datetime.now(TASHKENT_TZ)
         await session.commit()
         return f"{row.full_name} guruhdan bloklandi 🚫"

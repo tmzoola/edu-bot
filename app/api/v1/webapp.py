@@ -3,7 +3,7 @@ import hmac
 import json
 import logging
 import random
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from typing import Any
 from urllib.parse import parse_qsl
 
@@ -526,8 +526,7 @@ async def submit_quiz(
         total=total,
         time_taken_seconds=time_taken,
         answers=answers,
-        # completed_at column is TIMESTAMP WITHOUT TIME ZONE; use naive UTC.
-        completed_at=datetime.utcnow(),
+        completed_at=datetime.now(TASHKENT_TZ),
     )
     db.add(attempt)
     await db.commit()
@@ -602,7 +601,7 @@ async def get_results(attempt_id: int, db: AsyncSession = Depends(get_db)):
             "points": a.points,
             "percentage": a.percentage,
             "time_taken_seconds": a.time_taken_seconds,
-            "date": a.createdAt.strftime("%d.%m.%Y %H:%M") if a.createdAt else "",
+            "date": _fmt_tashkent(a.createdAt),
             "is_current": a.id == attempt.id,
         })
 
@@ -643,7 +642,7 @@ def _period_since(period: str) -> datetime | None:
     days = _PERIODS.get(period)
     if not days:
         return None
-    return datetime.now(timezone.utc) - timedelta(days=days)
+    return datetime.now(TASHKENT_TZ) - timedelta(days=days)
 
 
 @api.get("/leaderboard")
@@ -796,7 +795,7 @@ async def my_progress(
                 "points": a.points,
                 "time_taken_seconds": a.time_taken_seconds,
                 "percentage": a.percentage,
-                "date": a.createdAt.strftime("%d.%m.%Y %H:%M") if a.createdAt else "",
+                "date": _fmt_tashkent(a.createdAt),
             }
             for a in attempts
         ],
@@ -896,6 +895,16 @@ DAILY_QUESTION_COUNT = 10
 
 def _today_tashkent() -> date:
     return datetime.now(TASHKENT_TZ).date()
+
+
+def _fmt_tashkent(ts: datetime | None, fallback: str = "") -> str:
+    if ts is None:
+        return fallback
+    if ts.tzinfo is None:
+        # Legacy naive rows were written as UTC.
+        from datetime import timezone as _tz
+        ts = ts.replace(tzinfo=_tz.utc)
+    return ts.astimezone(TASHKENT_TZ).strftime("%d.%m.%Y %H:%M")
 
 
 def _attempt_date(a: QuizAttempt) -> date | None:
@@ -1108,7 +1117,7 @@ async def submit_daily(
             total=total,
             time_taken_seconds=time_taken,
             answers=answers,
-            completed_at=datetime.utcnow(),
+            completed_at=datetime.now(TASHKENT_TZ),
         ))
         await db.commit()
 
@@ -1139,7 +1148,7 @@ def _contest_state(c: Contest, now: datetime) -> str:
 
 
 def _contest_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(TASHKENT_TZ)
 
 
 @api.get("/contests")
@@ -1218,7 +1227,7 @@ async def get_contest(
                 "total": a.total,
                 "percentage": a.percentage,
                 "time_taken_seconds": a.time_taken_seconds,
-                "completed_at": a.completed_at.strftime("%d.%m.%Y %H:%M") if a.completed_at else "",
+                "completed_at": _fmt_tashkent(a.completed_at),
             }
 
     now = _contest_now()
@@ -1335,7 +1344,7 @@ async def submit_contest(
         total=total,
         time_taken_seconds=time_taken,
         answers=answers,
-        completed_at=datetime.now(timezone.utc),
+        completed_at=datetime.now(TASHKENT_TZ),
     )
     db.add(attempt)
     await db.commit()
@@ -1425,7 +1434,7 @@ async def admin_dashboard_stats(db: AsyncSession = Depends(get_db)):
                 "score": a.score,
                 "total": a.total,
                 "percentage": a.percentage,
-                "date": a.completed_at.strftime("%d.%m.%Y %H:%M") if a.completed_at else "—",
+                "date": _fmt_tashkent(a.completed_at, "—"),
             }
             for a in recent
         ],
@@ -1471,7 +1480,7 @@ async def my_orders(
             "delivery_name": o.delivery_name,
             "delivery_phone": o.delivery_phone,
             "delivery_address": o.delivery_address,
-            "created_at": o.createdAt.strftime("%d.%m.%Y %H:%M") if o.createdAt else "—",
+            "created_at": _fmt_tashkent(o.createdAt, "—"),
         }
         for o in rows
     ]

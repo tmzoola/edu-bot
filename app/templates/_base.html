@@ -153,15 +153,16 @@ img,svg{display:block}
     const tg = window.Telegram?.WebApp;
     if (tg){ tg.ready(); tg.expand(); }
 
-    // Cache user info (from initData) once per session
+    // One-time cleanup of legacy sessionStorage cache that leaked names
+    // between accounts sharing a Telegram webview.
+    try { sessionStorage.removeItem('mk_user'); } catch(e){}
+
     window.MK = {
         user: null,
         initData: tg?.initData || '',
 
         async ensureAuth(){
             if (this.user) return this.user;
-            const cached = sessionStorage.getItem('mk_user');
-            if (cached) { this.user = JSON.parse(cached); return this.user; }
 
             const tgUser = tg?.initDataUnsafe?.user;
             const payload = this.initData
@@ -177,7 +178,6 @@ img,svg{display:block}
                 if (r.status === 403) { this.showBlocked(); return null; }
                 if (r.ok) {
                     this.user = await r.json();
-                    sessionStorage.setItem('mk_user', JSON.stringify(this.user));
                 }
             } catch (e) { console.warn('auth failed', e); }
 

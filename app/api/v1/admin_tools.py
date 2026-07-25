@@ -4,6 +4,8 @@ import logging
 import re
 import uuid
 from datetime import datetime
+
+from models.base import TASHKENT_TZ
 from pathlib import Path
 from typing import Any
 
@@ -493,6 +495,15 @@ async def shop_book_delete(book_id: int, db: AsyncSession = Depends(get_db)):
 
 # ═══ Contests (yutuqli test) ════════════════════════════════════════
 
+def _fmt_tashkent(ts: datetime | None, fallback: str = "") -> str:
+    if ts is None:
+        return fallback
+    if ts.tzinfo is None:
+        from datetime import timezone as _tz
+        ts = ts.replace(tzinfo=_tz.utc)
+    return ts.astimezone(TASHKENT_TZ).strftime("%d.%m.%Y %H:%M")
+
+
 def _parse_dt(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -525,7 +536,7 @@ async def contests_page(request: Request, db: AsyncSession = Depends(get_db)):
     )
     counts = dict(counts_rows.all())
 
-    now = datetime.now().astimezone()
+    now = datetime.now(TASHKENT_TZ)
     contests = []
     for c in rows:
         q_count = len(c.questions)
@@ -682,7 +693,7 @@ async def contest_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
     cid = contest.id
     ctitle = contest.title
     cprize = contest.prize
-    cstart_iso = contest.start_at.strftime("%d.%m.%Y %H:%M")
+    cstart_iso = _fmt_tashkent(contest.start_at)
     await db.commit()
 
     notify = bool(payload.get("notify", is_new))
@@ -732,7 +743,7 @@ async def contest_winners_page(contest_id: int, request: Request, db: AsyncSessi
             "total": a.total,
             "percentage": a.percentage,
             "time_taken_seconds": a.time_taken_seconds,
-            "completed_at": a.completed_at.strftime("%d.%m.%Y %H:%M") if a.completed_at else "",
+            "completed_at": _fmt_tashkent(a.completed_at),
         })
 
     return templates.TemplateResponse(
@@ -743,8 +754,8 @@ async def contest_winners_page(contest_id: int, request: Request, db: AsyncSessi
                 "id": contest.id,
                 "title": contest.title,
                 "prize": contest.prize,
-                "start_at": contest.start_at.strftime("%d.%m.%Y %H:%M"),
-                "end_at": contest.end_at.strftime("%d.%m.%Y %H:%M"),
+                "start_at": _fmt_tashkent(contest.start_at),
+                "end_at": _fmt_tashkent(contest.end_at),
             },
             "participants": participants,
         },
@@ -802,7 +813,7 @@ async def contest_export(contest_id: int, db: AsyncSession = Depends(get_db)):
             a.percentage,
             a.time_taken_seconds,
             mmss,
-            a.completed_at.strftime("%d.%m.%Y %H:%M") if a.completed_at else "",
+            _fmt_tashkent(a.completed_at),
         ])
 
     widths = [6, 28, 20, 16, 18, 14, 12, 10, 14, 12, 20]
@@ -879,7 +890,7 @@ async def quotes_delete(quote_id: int, db: AsyncSession = Depends(get_db)):
     q = await db.get(MotivationalQuote, quote_id)
     if not q or q.deletedAt is not None:
         raise HTTPException(404, "Quote topilmadi")
-    q.deletedAt = datetime.now().astimezone()
+    q.deletedAt = datetime.now(TASHKENT_TZ)
     await db.commit()
     return {"ok": True}
 

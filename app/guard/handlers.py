@@ -19,6 +19,7 @@ from aiogram.types import (
 
 from core.config import MEDIA_ROOT, settings
 from db.session import session_factory
+from models.base import TASHKENT_TZ
 from models.guard import FlaggedUser, JoinEvent
 from services.nsfw_detector import bio_flagged_words, image_nsfw_score
 
@@ -197,7 +198,7 @@ async def on_mod_action(query: CallbackQuery, callback_data: ModAction, bot: Bot
             if row:
                 row.action = action
                 row.decided_by = who
-                row.decided_at = dt.datetime.now(dt.timezone.utc)
+                row.decided_at = dt.datetime.now(TASHKENT_TZ)
                 await session.commit()
 
     await query.answer()

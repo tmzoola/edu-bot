@@ -10,12 +10,13 @@ ro'yxati (bot tomonidan tabriknoma yuborish uchun).
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from models.base import TASHKENT_TZ
 from models.referral import InviteLink
 from models.rewards import RewardTier, UserReward
 
@@ -64,7 +65,7 @@ async def evaluate_user_rewards(
     if not eligible_tiers:
         return []
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(TASHKENT_TZ)
     rows = [
         {
             "user_id": user_id,
