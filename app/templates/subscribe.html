@@ -14,8 +14,10 @@
 .chat-name .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .join-btn{
   background:var(--green);color:#fff;border:0;border-radius:10px;
-  padding:9px 14px;font-weight:700;font-size:.85rem;text-decoration:none;flex:0 0 auto;
+  padding:9px 14px;font-weight:700;font-size:.85rem;text-decoration:none;
+  flex:0 0 auto;cursor:pointer;font-family:inherit;
 }
+.join-btn:active{transform:scale(.97)}
 .check-wrap{margin-top:18px;display:flex;flex-direction:column;gap:10px}
 .msg{padding:12px 14px;border-radius:12px;font-size:.85rem;font-weight:600}
 .msg-err{background:#FDE8E8;color:#c0392b}
@@ -50,6 +52,25 @@
 
 {% block script %}
 <script>
+function openTgLink(url){
+  // Telegram WebApp ichida oddiy `window.open` / `target=_blank` ishlamaydi —
+  // Telegram tashqi navigatsiyani bloklaydi. t.me linklari uchun
+  // openTelegramLink(), boshqalari uchun openLink() dan foydalanamiz.
+  const tg = window.Telegram?.WebApp;
+  if (!url) return;
+  try {
+    if (tg && /^https?:\/\/t\.me\//i.test(url) && tg.openTelegramLink){
+      tg.openTelegramLink(url);
+      return;
+    }
+    if (tg && tg.openLink){
+      tg.openLink(url, { try_instant_view: false });
+      return;
+    }
+  } catch(e){}
+  window.open(url, '_blank', 'noopener');
+}
+
 function render(chats){
   const box = document.getElementById('chats');
   box.innerHTML = '';
@@ -61,14 +82,20 @@ function render(chats){
   }
   for (const c of chats){
     const ico = c.type === 'channel' ? '📢' : '👥';
-    const url = c.url || '#';
-    const disabled = url === '#' ? 'style="opacity:.5;pointer-events:none"' : '';
+    const url = c.url || '';
+    const disabled = !url ? 'disabled style="opacity:.5"' : '';
     box.insertAdjacentHTML('beforeend',
       `<div class="chat-card">
         <div class="chat-name"><span class="ico">${ico}</span><span class="t">${c.title||''}</span></div>
-        <a class="join-btn" href="${url}" target="_blank" rel="noopener" ${disabled}>Qo'shilish</a>
+        <button class="join-btn" data-url="${url}" ${disabled}>Qo'shilish</button>
       </div>`);
   }
+  box.querySelectorAll('.join-btn[data-url]').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.preventDefault();
+      openTgLink(btn.getAttribute('data-url'));
+    });
+  });
 }
 
 async function refresh(){
