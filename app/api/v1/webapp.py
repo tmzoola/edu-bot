@@ -304,16 +304,35 @@ async def _resolve_user(
 
 # ═══ Subscription gate helpers ═══════════════════════════════════════
 
-# In-memory kesh: (expires_at_epoch, state_dict) — per user telegram_id.
-# 60 sekund TTL. Bir foydalanuvchi 1 daqiqada 10-20 marta WebApp'ga so'rov
-# yuborishi mumkin (auth, me, modules, quiz, ...) — kesh Telegram
-# `get_chat_member` chaqiriqlarini shu koeffitsientga kamaytiradi.
-_SUB_CACHE: dict[int, tuple[float, dict[str, Any]]] = {}
+# Redis'da 60 soniya keshlanadi. Multi-worker (uvicorn --workers N) va bot
+# konteyner o'rtasida umumiy — har workerda alohida kesh saqlanmaydi.
 _SUB_TTL_SECONDS = 60
 
+try:
+    import redis.asyncio as _aioredis  # type: ignore
+    _redis = _aioredis.from_url(
+        settings.REDIS_URL,
+        encoding="utf-8",
+        decode_responses=True,
+        socket_timeout=2,
+        socket_connect_timeout=2,
+    )
+except Exception:  # noqa: BLE001
+    logger.exception("Redis client init failed — sub cache o'chirildi")
+    _redis = None
 
-def _sub_cache_invalidate(user_tg_id: int) -> None:
-    _SUB_CACHE.pop(user_tg_id, None)
+
+def _sub_key(user_tg_id: int) -> str:
+    return f"mk:sub:{user_tg_id}"
+
+
+async def _sub_cache_invalidate(user_tg_id: int) -> None:
+    if _redis is None:
+        return
+    try:
+        await _redis.delete(_sub_key(user_tg_id))
+    except Exception:  # noqa: BLE001
+        logger.warning("Redis DEL xatosi: tg=%s", user_tg_id)
 
 
 async def _subscription_state(db: AsyncSession, user_tg_id: int) -> dict[str, Any]:
@@ -321,12 +340,14 @@ async def _subscription_state(db: AsyncSession, user_tg_id: int) -> dict[str, An
     Xato bo'lsa (bot yo'q, tarmoq muammosi, ...) — jimgina "ok" deb olamiz,
     aks holda butun WebApp ishlamay qoladi.
     """
-    import time
-
-    now = time.monotonic()
-    cached = _SUB_CACHE.get(user_tg_id)
-    if cached and cached[0] > now:
-        return cached[1]
+    # 1) Redis'dan kesh olishga urinamiz.
+    if _redis is not None:
+        try:
+            raw = await _redis.get(_sub_key(user_tg_id))
+            if raw:
+                return json.loads(raw)
+        except Exception:  # noqa: BLE001
+            logger.warning("Redis GET xatosi: tg=%s", user_tg_id)
 
     from bot.setup import bot
     from services.referral.events import chat_join_url
@@ -350,7 +371,17 @@ async def _subscription_state(db: AsyncSession, user_tg_id: int) -> dict[str, An
             for c in missing
         ],
     }
-    _SUB_CACHE[user_tg_id] = (now + _SUB_TTL_SECONDS, state)
+
+    if _redis is not None:
+        try:
+            await _redis.setex(
+                _sub_key(user_tg_id),
+                _SUB_TTL_SECONDS,
+                json.dumps(state, ensure_ascii=False),
+            )
+        except Exception:  # noqa: BLE001
+            logger.warning("Redis SETEX xatosi: tg=%s", user_tg_id)
+
     return state
 
 
@@ -427,7 +458,7 @@ async def subscription_check(
         raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
     # Foydalanuvchi "Tekshirish" bosdi — kesh eskirgan bo'lishi mumkin
     # (endi kanalga qo'shilgan bo'lishi mumkin). Toza natija olamiz.
-    _sub_cache_invalidate(user.telegram_id)
+    await _sub_cache_invalidate(user.telegram_id)
     return await _subscription_state(db, user.telegram_id)
 
 

@@ -1,9 +1,6 @@
-import asyncio
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 import uvicorn
 from admin import setup_admin
@@ -32,76 +29,28 @@ from starlette.responses import JSONResponse
 logger = logging.getLogger(__name__)
 
 
-_TZ = ZoneInfo("Asia/Tashkent")
-_REENGAGEMENT_HOUR = 10  # 10:00 Tashkent time
-
-
-async def _reengagement_loop() -> None:
-    """Fire daily re-engagement notifications at 10:00 Tashkent time."""
-    from services.notifications import send_reengagement_notifications
-
-    while True:
-        now = datetime.now(_TZ)
-        # Seconds until next 10:00
-        next_run = now.replace(hour=_REENGAGEMENT_HOUR, minute=0, second=0, microsecond=0)
-        if now >= next_run:
-            # Already past 10:00 today — schedule for tomorrow
-            next_run = next_run.replace(day=next_run.day + 1)
-        wait = (next_run - now).total_seconds()
-        logger.info("Reengagement: next run in %.0f s (%s)", wait, next_run.isoformat())
-        await asyncio.sleep(wait)
-        try:
-            stats = await send_reengagement_notifications(settings.WEBAPP_URL)
-            logger.info("Reengagement done: %s", stats)
-        except Exception:
-            logger.exception("Reengagement notification error")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
     setup_admin(app)
 
-    # Start Telegram bot polling
-    from aiogram.types import BotCommand, BotCommandScopeDefault
-    from bot.setup import ALLOWED_UPDATES, bot, dp
-
-    try:
-        await bot.set_my_commands(
-            [BotCommand(command="start", description="Botni ishga tushirish")],
-            scope=BotCommandScopeDefault(),
-        )
-    except Exception:
-        logger.exception("set_my_commands failed")
-
-    polling_task = asyncio.create_task(
-        dp.start_polling(bot, skip_updates=True, allowed_updates=ALLOWED_UPDATES)
-    )
-    logger.info("✅ Bot polling started")
-
-    reengagement_task = asyncio.create_task(_reengagement_loop())
-    logger.info("✅ Reengagement scheduler started")
-
-    # T-022 · Referral anti-fraud grace period worker.
-    from services.referral.pending_joins_worker import pending_joins_loop
-
-    pending_joins_task = asyncio.create_task(pending_joins_loop())
-    logger.info("✅ Pending joins worker started")
+    # NB: Bot polling + reengagement + pending_joins loop'lari endi alohida
+    # `bot` konteynerida (`app/bot_main.py`) ishlaydi. WebApp uvicorn ko'p
+    # worker bilan ishlaganda `TelegramConflictError` yuz bermasligi va
+    # background task'lar N marta takrorlanmasligi uchun.
+    # `bot` obyektining o'zi bu process'da import qilinadi va send_message /
+    # get_chat_member kabi chaqiruvlar uchun ishlatiladi.
+    logger.info("✅ WebApp lifespan boshlandi (bot polling alohida konteynerda)")
 
     yield
 
-    # Graceful shutdown
-    logger.info("🔴 Shutting down...")
-    pending_joins_task.cancel()
-    reengagement_task.cancel()
-    polling_task.cancel()
-    for task in (polling_task, reengagement_task, pending_joins_task):
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-    await bot.session.close()
-    logger.info("Bot stopped.")
+    logger.info("🔴 WebApp lifespan yakunlandi")
+    from bot.setup import bot
+
+    try:
+        await bot.session.close()
+    except Exception:
+        logger.exception("bot.session.close xatosi")
 
 
 app = FastAPI(

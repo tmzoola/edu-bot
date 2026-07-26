@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     BOT_USERNAME: str = "muslima_darmonova_bot"
     WEBAPP_URL: str = "http://localhost:8000"
 
+    # Multi-worker umumiy kesh (subscription state va h.k.) — Redis URL.
+    REDIS_URL: str = "redis://redis:6379/0"
+
     # --- Guruh guard boti (@tozakanal_bot) ---
     GUARD_BOT_TOKEN: str = "8955731141:AAG29R0HzIvHoPNXGrN4-RhaaHkyZlPFcmM"
     GUARD_ADMIN_CHAT_ID: int = 765001726

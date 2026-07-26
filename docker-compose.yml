@@ -25,12 +25,25 @@ services:
       retries: 10
       start_period: 5s
 
+  redis:
+    image: redis:7-alpine
+    container_name: malaka_redis
+    restart: always
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   app:
     build: .
     container_name: malaka_app
     restart: always
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "8000:8000"
@@ -39,6 +52,8 @@ services:
     environment:
       # Override .env's localhost so the app reaches the db container
       POSTGRES_HOST: db
+      REDIS_URL: redis://redis:6379/0
+      UVICORN_WORKERS: "2"
     volumes:
       # Uploaded files (books etc.) must survive image rebuilds
       - media_data:/project/app/media
@@ -48,6 +63,30 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
+  # Bot polling + background worker'lar (reengagement, pending_joins).
+  # WebApp app konteynerlari polling qilmaydi — TelegramConflictError yo'q,
+  # background task'lar N marta takrorlanmaydi.
+  bot:
+    build: .
+    container_name: malaka_bot
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      REDIS_URL: redis://redis:6379/0
+    working_dir: /project/app
+    entrypoint: ["python", "-m", "bot_main"]
+    volumes:
+      - media_data:/project/app/media
+    healthcheck:
+      disable: true
 
   # 18+ rasm aniqlash guard boti (@tozakanal_bot) — hozircha kerak emas,
   # `profiles`ga tayinlab qo'ydik. Kerak bo'lganda:
@@ -78,3 +117,4 @@ services:
 volumes:
   postgres_data:
   media_data:
+  redis_data:
