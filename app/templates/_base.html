@@ -156,9 +156,30 @@ img,svg{display:block}
     // Eski (kalitsiz) keshni bir marta tozalash — u nomlarni oqizardi.
     try { sessionStorage.removeItem('mk_user'); } catch(e){}
 
-    // Joriy Telegram foydalanuvchisining ID'si. Kesh SHU ID bilan bog'lanadi,
-    // shuning uchun bir webview ichida turli hisoblar bir-birining ismini
-    // ko'ra olmaydi.
+    // Telegram initData'ni URL hash orqali beradi (#tgWebAppData=...).
+    // Sahifadan sahifaga o'tganda hash yo'qoladi — shu sababli har ichki
+    // <a href> click'ida joriy hash'ni meros qilib beramiz. Bu kesh emas,
+    // shunchaki URL manipulyatsiyasi — server har chaqiruvda initData
+    // imzosini qayta tekshiradi.
+    const currentHash = location.hash || '';
+    if (currentHash) {
+        document.addEventListener('click', function(ev){
+            const a = ev.target.closest && ev.target.closest('a[href]');
+            if (!a) return;
+            const href = a.getAttribute('href');
+            if (!href || href.startsWith('#') || /^[a-z]+:/i.test(href)) return;
+            try {
+                const u = new URL(href, location.href);
+                if (u.origin !== location.origin) return;
+                if (!u.hash) {
+                    u.hash = currentHash;
+                    a.setAttribute('href', u.pathname + u.search + u.hash);
+                }
+            } catch(e){}
+        }, true);
+    }
+
+    // Joriy Telegram foydalanuvchisining ID'si. Kesh SHU ID bilan bog'lanadi.
     const tgUserId = tg?.initDataUnsafe?.user?.id || null;
     const CACHE_KEY = tgUserId ? `mk_user_${tgUserId}` : null;
 

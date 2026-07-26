@@ -206,6 +206,26 @@ if(window.Telegram?.WebApp){
   tg.ready();tg.expand();
   try{tg.setHeaderColor('#0b1c3f');tg.setBackgroundColor('#060f26');}catch(e){}
 }
+// "Boshlash" bosilganda ichki sahifaga URL hash'ni (#tgWebAppData=...) meros
+// qilib beramiz — Telegram SDK yangi sahifada initData'ni qayta o'qishi uchun.
+(function(){
+  const currentHash = location.hash || '';
+  if (!currentHash) return;
+  document.addEventListener('click', function(ev){
+    const a = ev.target.closest && ev.target.closest('a[href]');
+    if (!a) return;
+    const href = a.getAttribute('href');
+    if (!href || href.startsWith('#') || /^[a-z]+:/i.test(href)) return;
+    try {
+      const u = new URL(href, location.href);
+      if (u.origin !== location.origin) return;
+      if (!u.hash) {
+        u.hash = currentHash;
+        a.setAttribute('href', u.pathname + u.search + u.hash);
+      }
+    } catch(e){}
+  }, true);
+})();
 
 /* Load hero photo via fetch so we can pass ngrok-skip-browser-warning
    (an <img> tag can't send headers, and ngrok-free otherwise returns its
