@@ -223,7 +223,14 @@ img,svg{display:block}
                 if (r.status === 403) { this.showBlocked(); return null; }
                 if (r.ok) {
                     this.user = await r.json();
-                    if (CACHE_KEY && this.user && this.user.telegram_id === tgUserId) {
+                    // must_subscribe holatida keshlamang — foydalanuvchi kanalga
+                    // qo'shilgach yangi holat qayta olinishi kerak.
+                    if (
+                        CACHE_KEY
+                        && this.user
+                        && this.user.telegram_id === tgUserId
+                        && this.user.must_subscribe !== true
+                    ) {
                         try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(this.user)); } catch(e){}
                     }
                 }
@@ -234,6 +241,15 @@ img,svg{display:block}
                 const path = location.pathname;
                 if (!path.endsWith('/webapp/register') && !path.endsWith('/webapp/register/')) {
                     location.href = '/webapp/register';
+                    return this.user;
+                }
+            }
+            // Gate: barcha faol kuzatiladigan chatlarga a'zo bo'lish majburiy.
+            if (this.user && this.user.must_subscribe === true) {
+                const path = location.pathname;
+                const allowed = ['/webapp/subscribe', '/webapp/register'];
+                if (!allowed.some(p => path === p || path === p + '/')) {
+                    location.href = '/webapp/subscribe';
                     return this.user;
                 }
             }

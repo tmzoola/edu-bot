@@ -144,6 +144,11 @@ async def register_page(request: Request):
     return templates.TemplateResponse("register.html", {"request": request})
 
 
+@pages.get("/subscribe", response_class=HTMLResponse)
+async def subscribe_page(request: Request):
+    return templates.TemplateResponse("subscribe.html", {"request": request})
+
+
 @pages.get("/daily", response_class=HTMLResponse)
 async def daily_page(request: Request):
     return templates.TemplateResponse("daily.html", {"request": request})
@@ -292,6 +297,48 @@ async def _resolve_user(
     return None
 
 
+# ═══ Subscription gate helpers ═══════════════════════════════════════
+
+async def _subscription_state(db: AsyncSession, user_tg_id: int) -> dict[str, Any]:
+    """Foydalanuvchi barcha faol tracked chatlarga a'zomi — tekshirib qaytaradi.
+    Xato bo'lsa (bot yo'q, tarmoq muammosi, ...) — jimgina "ok" deb olamiz,
+    aks holda butun WebApp ishlamay qoladi.
+    """
+    from bot.setup import bot
+    from services.referral.events import chat_join_url
+    from services.referral.membership import check_subscription
+
+    try:
+        ok, missing = await check_subscription(db, bot, user_tg_id=user_tg_id)
+    except Exception:  # noqa: BLE001
+        logger.exception("check_subscription xatosi: tg=%s", user_tg_id)
+        return {"must_subscribe": False, "missing_chats": []}
+
+    return {
+        "must_subscribe": not ok,
+        "missing_chats": [
+            {
+                "title": c.title,
+                "type": c.type,
+                "url": chat_join_url(c),
+            }
+            for c in missing
+        ],
+    }
+
+
+async def _require_subscribed(db: AsyncSession, user_tg_id: int) -> None:
+    state = await _subscription_state(db, user_tg_id)
+    if state["must_subscribe"]:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "must_subscribe",
+                "missing_chats": state["missing_chats"],
+            },
+        )
+
+
 # ═══ Auth endpoint ═══════════════════════════════════════════════════
 
 @api.post("/auth")
@@ -328,6 +375,7 @@ async def auth(request: Request, payload: dict[str, Any], db: AsyncSession = Dep
     # Session cookie'ni yangilaymiz — keyingi sahifalar initData'siz auth qila oladi.
     request.session["mk_tg_id"] = user.telegram_id
 
+    sub_state = await _subscription_state(db, user.telegram_id)
     return {
         "id": user.id,
         "telegram_id": user.telegram_id,
@@ -336,7 +384,21 @@ async def auth(request: Request, payload: dict[str, Any], db: AsyncSession = Dep
         "username": user.username,
         "phone": user.phone,
         "is_registered": user.is_registered,
+        **sub_state,
     }
+
+
+@api.get("/subscription/check")
+async def subscription_check(
+    db: AsyncSession = Depends(get_db),
+    x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
+    x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+    request: Request = None,  # noqa: B008
+):
+    user = await _resolve_user(db, x_init_data, x_tg_id, request)
+    if not user:
+        raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
+    return await _subscription_state(db, user.telegram_id)
 
 
 # ═══ Public content ══════════════════════════════════════════════════
@@ -567,6 +629,7 @@ async def submit_quiz(
     user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if not user:
         raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
+    await _require_subscribed(db, user.telegram_id)
 
     result = await db.execute(
         select(Quiz).where(Quiz.id == quiz_id).options(selectinload(Quiz.questions))
@@ -776,6 +839,7 @@ async def get_me(
     user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if not user:
         raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
+    sub_state = await _subscription_state(db, user.telegram_id)
     return {
         "id": user.id,
         "telegram_id": user.telegram_id,
@@ -784,6 +848,7 @@ async def get_me(
         "username": user.username,
         "phone": user.phone,
         "is_registered": user.is_registered,
+        **sub_state,
     }
 
 
@@ -1147,6 +1212,7 @@ async def submit_daily(
     user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if not user:
         raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
+    await _require_subscribed(db, user.telegram_id)
 
     topic, questions = await _daily_selection(db)
     daily_quiz = await _get_or_create_daily_quiz(db)
@@ -1335,6 +1401,7 @@ async def get_contest_questions(
     user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if not user:
         raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
+    await _require_subscribed(db, user.telegram_id)
 
     contest = await db.get(Contest, contest_id)
     if not contest or not contest.is_active:
@@ -1387,6 +1454,7 @@ async def submit_contest(
     user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if not user:
         raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
+    await _require_subscribed(db, user.telegram_id)
 
     contest = await db.get(Contest, contest_id)
     if not contest or not contest.is_active:
