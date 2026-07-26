@@ -118,7 +118,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.SECRET_KEY,
+    same_site="none",
+    https_only=True,
+    max_age=60 * 60 * 24 * 30,
+)
 
 
 @app.middleware("http")
