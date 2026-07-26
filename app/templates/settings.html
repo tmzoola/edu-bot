@@ -75,6 +75,12 @@ document.getElementById('save').addEventListener('click', async () => {
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.detail || 'Xatolik');
+        if (MK.user) {
+            MK.user.first_name = d.first_name;
+            MK.user.last_name = d.last_name;
+            const key = `mk_user_${MK.user.telegram_id}`;
+            try { sessionStorage.setItem(key, JSON.stringify(MK.user)); } catch(e){}
+        }
         MK.haptic('success');
         showMsg('ok', "✅ Saqlandi");
     } catch(e){
