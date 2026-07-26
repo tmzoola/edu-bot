@@ -34,10 +34,22 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    # `exc.detail` — Foydalanuvchiga ko'rsatiladigan matn (yoki dict). Frontendlar
+    # `detail` maydonini ochib o'qiydi, shu sababli uni matn shaklida qaytaramiz.
+    if isinstance(exc.detail, str):
+        message = exc.detail
+    else:
+        # HTTPException(detail={"code": ..., "missing_chats": [...]}) kabi holatlar
+        # uchun dict'ni JSON string sifatida uzatib, frontend parse qila oladi.
+        import json as _json
+        try:
+            message = _json.dumps(exc.detail, ensure_ascii=False)
+        except Exception:
+            message = str(exc.detail)
     return JSONResponse(
         status_code=exc.status_code,
         content=ErrorResponse(
-            status_code=exc.status_code, error=exc.detail, detail="HTTPError"
+            status_code=exc.status_code, error="HTTPError", detail=message
         ).model_dump(),
     )
 

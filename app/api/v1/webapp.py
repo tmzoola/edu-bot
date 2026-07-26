@@ -180,6 +180,13 @@ async def contest_winners_web_page(request: Request, contest_id: int):
     )
 
 
+@pages.get("/contests/{contest_id}/review", response_class=HTMLResponse)
+async def contest_review_page(request: Request, contest_id: int):
+    return templates.TemplateResponse(
+        "contest_review.html", {"request": request, "contest_id": contest_id}
+    )
+
+
 @pages.get("/books", response_class=HTMLResponse)
 async def books_page(request: Request):
     return templates.TemplateResponse("books.html", {"request": request})
@@ -263,10 +270,15 @@ async def _get_or_create_tg_user(db: AsyncSession, tg_data: dict[str, Any]) -> T
 async def _resolve_user(
     db: AsyncSession,
     x_init_data: str | None,
-    x_tg_id: int | None,
+    x_tg_id: int | None,  # noqa: ARG001 — qabul qilinadi, ammo ishonchsiz
     request: Request | None = None,
 ) -> TelegramUser | None:
-    """Prefer signed initData, then session cookie, then raw telegram_id."""
+    """Faqat imzolangan manbalarga ishonadi:
+      1) `X-Init-Data` — Telegram tomonidan bot token bilan HMAC-imzolangan;
+      2) Server session cookie (`mk_tg_id`) — biz oldingi so'rovda o'rnatgan.
+    `X-Telegram-Id` header'iga ishonmaydi — u imzosiz va boshqa foydalanuvchi
+    sifatida kirish uchun ishlatilishi mumkin edi.
+    """
     if x_init_data:
         tg = _verify_telegram_init_data(x_init_data)
         if tg:
@@ -287,23 +299,35 @@ async def _resolve_user(
                 if user.is_banned:
                     raise HTTPException(403, "Siz bloklangansiz")
                 return user
-    if x_tg_id and int(x_tg_id) > 0:
-        result = await db.execute(select(TelegramUser).where(TelegramUser.telegram_id == int(x_tg_id)))
-        user = result.scalar_one_or_none()
-        if user:
-            if user.is_banned:
-                raise HTTPException(403, "Siz bloklangansiz")
-            return user
     return None
 
 
 # ═══ Subscription gate helpers ═══════════════════════════════════════
+
+# In-memory kesh: (expires_at_epoch, state_dict) — per user telegram_id.
+# 60 sekund TTL. Bir foydalanuvchi 1 daqiqada 10-20 marta WebApp'ga so'rov
+# yuborishi mumkin (auth, me, modules, quiz, ...) — kesh Telegram
+# `get_chat_member` chaqiriqlarini shu koeffitsientga kamaytiradi.
+_SUB_CACHE: dict[int, tuple[float, dict[str, Any]]] = {}
+_SUB_TTL_SECONDS = 60
+
+
+def _sub_cache_invalidate(user_tg_id: int) -> None:
+    _SUB_CACHE.pop(user_tg_id, None)
+
 
 async def _subscription_state(db: AsyncSession, user_tg_id: int) -> dict[str, Any]:
     """Foydalanuvchi barcha faol tracked chatlarga a'zomi — tekshirib qaytaradi.
     Xato bo'lsa (bot yo'q, tarmoq muammosi, ...) — jimgina "ok" deb olamiz,
     aks holda butun WebApp ishlamay qoladi.
     """
+    import time
+
+    now = time.monotonic()
+    cached = _SUB_CACHE.get(user_tg_id)
+    if cached and cached[0] > now:
+        return cached[1]
+
     from bot.setup import bot
     from services.referral.events import chat_join_url
     from services.referral.membership import check_subscription
@@ -312,9 +336,10 @@ async def _subscription_state(db: AsyncSession, user_tg_id: int) -> dict[str, An
         ok, missing = await check_subscription(db, bot, user_tg_id=user_tg_id)
     except Exception:  # noqa: BLE001
         logger.exception("check_subscription xatosi: tg=%s", user_tg_id)
+        # Xatolik — WebApp ishlashda davom etsin, keshlamaymiz.
         return {"must_subscribe": False, "missing_chats": []}
 
-    return {
+    state = {
         "must_subscribe": not ok,
         "missing_chats": [
             {
@@ -325,6 +350,8 @@ async def _subscription_state(db: AsyncSession, user_tg_id: int) -> dict[str, An
             for c in missing
         ],
     }
+    _SUB_CACHE[user_tg_id] = (now + _SUB_TTL_SECONDS, state)
+    return state
 
 
 async def _require_subscribed(db: AsyncSession, user_tg_id: int) -> None:
@@ -398,6 +425,9 @@ async def subscription_check(
     user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if not user:
         raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
+    # Foydalanuvchi "Tekshirish" bosdi — kesh eskirgan bo'lishi mumkin
+    # (endi kanalga qo'shilgan bo'lishi mumkin). Toza natija olamiz.
+    _sub_cache_invalidate(user.telegram_id)
     return await _subscription_state(db, user.telegram_id)
 
 
@@ -1502,6 +1532,82 @@ async def submit_contest(
         "total": total,
         "percentage": round(score / total * 100) if total else 0,
         "time_taken_seconds": time_taken,
+    }
+
+
+@api.get("/contests/{contest_id}/review")
+async def get_contest_review(
+    contest_id: int,
+    db: AsyncSession = Depends(get_db),
+    x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
+    x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+    request: Request = None,  # noqa: B008
+):
+    """Contest tugagach ishtirokchining javob tahlili.
+
+    Musobaqa jarayoni davomida to'g'ri javoblarni yashiramiz (aks holda
+    ishtirokchilar bir-biriga aytib qo'yishi mumkin). Faqat `end_at` o'tgach
+    yoki `is_active=False` bo'lganda tahlil ochiladi.
+    """
+    user = await _resolve_user(db, x_init_data, x_tg_id, request)
+    if not user:
+        raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
+
+    contest = await db.get(
+        Contest, contest_id, options=[selectinload(Contest.questions)]
+    )
+    if not contest:
+        raise HTTPException(404, "Yutuqli test topilmadi")
+
+    state = _contest_state(contest, _contest_now())
+    if state not in ("finished", "inactive"):
+        raise HTTPException(
+            403, "Tahlil faqat musobaqa yakunlangach ochiladi"
+        )
+
+    attempt = (
+        await db.execute(
+            select(ContestAttempt).where(
+                ContestAttempt.contest_id == contest_id,
+                ContestAttempt.user_id == user.id,
+            )
+        )
+    ).scalar_one_or_none()
+    if attempt is None:
+        raise HTTPException(404, "Siz bu musobaqada ishtirok etmagansiz")
+
+    user_answers: dict = attempt.answers or {}
+    review = []
+    for q in sorted(contest.questions, key=lambda x: x.order):
+        chosen = user_answers.get(str(q.id))
+        correct = q.correct_option.value
+        review.append({
+            "id": q.id,
+            "text": q.text,
+            "image_url": q.image_url,
+            "option_a": q.option_a,
+            "option_b": q.option_b,
+            "option_c": q.option_c,
+            "option_d": q.option_d,
+            "chosen": chosen,
+            "correct": correct,
+            "is_correct": chosen == correct,
+            "explanation": q.explanation,
+        })
+
+    return {
+        "contest": {
+            "id": contest.id,
+            "title": contest.title,
+            "end_at": contest.end_at.isoformat(),
+        },
+        "attempt": {
+            "score": attempt.score,
+            "total": attempt.total,
+            "percentage": attempt.percentage,
+            "time_taken_seconds": attempt.time_taken_seconds,
+        },
+        "review": review,
     }
 
 
