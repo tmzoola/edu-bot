@@ -4,7 +4,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from aiogram import F, Router
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command, CommandObject, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -191,9 +191,24 @@ async def _maybe_show_event(msg: Message) -> bool:
 
 
 @router.message(CommandStart())
-async def start_handler(msg: Message, state: FSMContext):
+async def start_handler(msg: Message, state: FSMContext, command: CommandObject):
     await state.clear()
     user = await get_or_create_user(msg.from_user)
+
+    # /start ref_<inviter_tg_id> — inline "Qatnashaman" tugmasi orqali kelgan.
+    # Hozircha inviter ma'lumotini log qilamiz; asosiy referral hisob-kitob
+    # invite link'lar orqali TrackedChat'ga qo'shilganda yuritiladi.
+    args = (command.args or "").strip()
+    if args.startswith("ref_"):
+        try:
+            inviter_tg_id = int(args[4:])
+            logger.info(
+                "start deep-link: user=%s inviter=%s",
+                msg.from_user.id,
+                inviter_tg_id,
+            )
+        except ValueError:
+            pass
 
     if not user.is_registered:
         await msg.answer(

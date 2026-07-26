@@ -7,6 +7,7 @@ from bot.handlers import (
     referral_admin_events_router,
     referral_chat_member_router,
     referral_event_router,
+    referral_inline_router,
     referral_join_request_router,
     referral_menu_router,
 )
@@ -32,10 +33,13 @@ dp.include_router(referral_menu_router)
 dp.include_router(referral_event_router)
 # Kanal (va join request rejimidagi guruh) uchun invite kuzatuv + avto tasdiq.
 dp.include_router(referral_join_request_router)
+# Inline mode: "📤 Do'stlarga ulashish" tugmasi orqali bot inline query.
+dp.include_router(referral_inline_router)
 
 # Malaka bot uchun standart update ro'yxati (`getUpdates` chaqiruvida yuboriladi).
 # `my_chat_member` T-015 uchun majburiy; `chat_member` T-018 (guruh join
-# tracking) uchun; `chat_join_request` kanalda invite kuzatuvi uchun.
+# tracking) uchun; `chat_join_request` kanalda invite kuzatuvi uchun;
+# `inline_query` "Do'stlarga ulashish" flow uchun.
 ALLOWED_UPDATES: list[str] = [
     "message",
     "edited_message",
@@ -43,4 +47,5 @@ ALLOWED_UPDATES: list[str] = [
     "my_chat_member",
     "chat_member",
     "chat_join_request",
+    "inline_query",
 ]

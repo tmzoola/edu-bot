@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     CORS_ALLOWED_ORIGINS: str = "http://localhost:8000"
 
     BOT_TOKEN: str
+    # Deep-link URL'lari (`https://t.me/<BOT_USERNAME>?start=...`) uchun kerak.
+    BOT_USERNAME: str = "muslima_darmonova_bot"
     WEBAPP_URL: str = "http://localhost:8000"
 
     # --- Guruh guard boti (@tozakanal_bot) ---

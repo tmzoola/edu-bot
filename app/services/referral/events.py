@@ -142,9 +142,18 @@ def join_buttons(chats: list[TrackedChat]) -> list[list[InlineKeyboardButton]]:
 
 
 def announcement_keyboard(chats: list[TrackedChat]) -> InlineKeyboardMarkup:
-    """E'lon uchun inline keyboard: chat qo'shilish tugmalari + "Obuna bo'ldim"."""
-    rows = join_buttons(chats)
-    rows.append(
-        [InlineKeyboardButton(text="✅ Obuna bo'ldim", callback_data=SUBSCRIBED_CB)]
+    """E'lon uchun inline keyboard: "Qatnashaman" + "Do'stlarga ulashish".
+
+    Chat qo'shilish tugmalari bu yerda ko'rsatilmaydi — foydalanuvchi
+    "Qatnashaman" bosgach a'zolik tekshiriladi va yetishmayotgan chatlar
+    keyingi xabarda chiqadi.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🎁 Qatnashaman", callback_data=SUBSCRIBED_CB)],
+            [InlineKeyboardButton(
+                text="📤 Do'stlarga ulashish",
+                switch_inline_query="",
+            )],
+        ]
     )
-    return InlineKeyboardMarkup(inline_keyboard=rows)
