@@ -155,13 +155,58 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/health")
 async def health_check():
+    """Butun stack diagnostikasi bitta joyda.
+    UptimeRobot va admin uchun — DB, Redis, pool holati.
+    """
+    import time as _t
+    from db.session import engine as _engine
+
+    result: dict = {"status": "ok"}
+    overall_ok = True
+
+    # DB latency + ping
+    t0 = _t.perf_counter()
     try:
         async with session_factory() as session:
             await session.execute(text("SELECT 1"))
+        db_latency_ms = int((_t.perf_counter() - t0) * 1000)
+        result["db"] = {"ok": True, "latency_ms": db_latency_ms}
     except Exception as e:
-        logger.error(f"DB error: {e}")
-        return JSONResponse(status_code=503, content={"status": "db-unreachable"})
-    return {"status": "ok"}
+        logger.error("Health: DB error: %s", e)
+        result["db"] = {"ok": False, "error": str(e)[:120]}
+        overall_ok = False
+
+    # SQLAlchemy pool holati (real vaqtda qancha ulanish band)
+    try:
+        pool = _engine.pool
+        result["pool"] = {
+            "size": pool.size(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow(),
+        }
+    except Exception:
+        pass
+
+    # Redis ping
+    try:
+        from api.v1.webapp import _redis  # local import — circular xavfsizligi uchun
+
+        if _redis is not None:
+            t1 = _t.perf_counter()
+            pong = await _redis.ping()
+            redis_latency_ms = int((_t.perf_counter() - t1) * 1000)
+            result["redis"] = {"ok": bool(pong), "latency_ms": redis_latency_ms}
+        else:
+            result["redis"] = {"ok": False, "error": "client not initialized"}
+    except Exception as e:
+        logger.warning("Health: Redis error: %s", e)
+        result["redis"] = {"ok": False, "error": str(e)[:120]}
+        # Redis muhim, lekin butun stack'ni yiqitmaymiz — WebApp Redis'siz ham
+        # ishlaydi (in-memory fallback yo'q, lekin subscription kesh o'chadi).
+
+    if not overall_ok:
+        return JSONResponse(status_code=503, content=result)
+    return result
 
 
 if __name__ == "__main__":

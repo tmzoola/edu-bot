@@ -1,8 +1,16 @@
+x-log-opts: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+    compress: "true"
+
 services:
   db:
     image: postgres:15-alpine
     container_name: malaka_db
     restart: always
+    logging: *default-logging
     # App pool (60) + guard/scripts + zaxira. 1000+ parallel foydalanuvchi
     # uchun default 100 kam bo'lishi mumkin.
     command: >
@@ -29,6 +37,7 @@ services:
     image: redis:7-alpine
     container_name: malaka_redis
     restart: always
+    logging: *default-logging
     command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -40,6 +49,7 @@ services:
     build: .
     container_name: malaka_app
     restart: always
+    logging: *default-logging
     depends_on:
       db:
         condition: service_healthy
@@ -71,6 +81,7 @@ services:
     build: .
     container_name: malaka_bot
     restart: always
+    logging: *default-logging
     depends_on:
       db:
         condition: service_healthy
@@ -97,6 +108,7 @@ services:
     build: .
     container_name: malaka_guard
     restart: always
+    logging: *default-logging
     depends_on:
       db:
         condition: service_healthy
@@ -114,7 +126,101 @@ services:
     healthcheck:
       disable: true
 
+  # ─────────────────────────────────────────────────────────────────
+  # Log kuzatuv stack: Dozzle (real-vaqt UI) + Loki + Promtail + Grafana
+  # (tarix + qidiruv + alerting). Nginx tarafda subpath'ga proxy:
+  #   ob-malaka.timv.uz/logs      → dozzle:8080
+  #   ob-malaka.timv.uz/grafana   → grafana:3000
+  # ─────────────────────────────────────────────────────────────────
+
+  # Dozzle — real-vaqt log ko'rish uchun engil UI (~30 MB RAM).
+  # Auth Nginx tarafda basic auth bilan qilinadi (soddaroq).
+  dozzle:
+    image: amir20/dozzle:v8.10.6
+    container_name: malaka_dozzle
+    restart: always
+    logging: *default-logging
+    environment:
+      DOZZLE_BASE: /logs
+      DOZZLE_LEVEL: warn
+      DOZZLE_NO_ANALYTICS: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/logs/healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Loki — log ma'lumotlar bazasi (log'ni siqib saqlaydi + LogQL).
+  loki:
+    image: grafana/loki:3.2.0
+    container_name: malaka_loki
+    restart: always
+    logging: *default-logging
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+      - ./observability/loki-config.yaml:/etc/loki/local-config.yaml:ro
+    expose:
+      - "3100"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Promtail — barcha konteynerdan log'ni yig'ib Loki'ga uzatuvchi agent.
+  promtail:
+    image: grafana/promtail:3.2.0
+    container_name: malaka_promtail
+    restart: always
+    logging: *default-logging
+    command: -config.file=/etc/promtail/config.yaml
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./observability/promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - promtail_positions:/tmp
+    depends_on:
+      - loki
+
+  # Grafana — brauzer UI, dashboard, alerting.
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: malaka_grafana
+    restart: always
+    logging: *default-logging
+    environment:
+      GF_SERVER_ROOT_URL: "https://ob-malaka.timv.uz/grafana"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin123}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_DEFAULT_THEME: "light"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/loki.yaml:ro
+    expose:
+      - "3000"
+    depends_on:
+      - loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3000/grafana/api/health || wget -q --spider http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
 volumes:
   postgres_data:
   media_data:
   redis_data:
+  loki_data:
+  grafana_data:
+  promtail_positions:
