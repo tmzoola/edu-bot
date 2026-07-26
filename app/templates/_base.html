@@ -153,92 +153,74 @@ img,svg{display:block}
     const tg = window.Telegram?.WebApp;
     if (tg){ tg.ready(); tg.expand(); }
 
-    // Eski keshni tozalash (nomlar oqib ketishi bug'idan meros).
-    try { sessionStorage.removeItem('mk_user'); sessionStorage.removeItem('mk_init'); } catch(e){}
+    // Eski (kalitsiz) keshni bir marta tozalash — u nomlarni oqizardi.
+    try { sessionStorage.removeItem('mk_user'); } catch(e){}
 
-    // Telegram initData'ni URL hash orqali beradi (`#tgWebAppData=...`).
-    // Sahifadan sahifaga o'tganda hash yo'qoladi — shu sababli har ichki
-    // <a href> click'ida joriy hash'ni URL'ga meros qilib beramiz. Bu
-    // keshsiz va foydalanuvchilar orasida hech narsani aralashtirmaydi.
-    const initData = tg?.initData || '';
-    const currentHash = location.hash || '';
-    if (currentHash) {
-        document.addEventListener('click', function(ev){
-            const a = ev.target.closest && ev.target.closest('a[href]');
-            if (!a) return;
-            const href = a.getAttribute('href');
-            if (!href || href.startsWith('#') || /^[a-z]+:/i.test(href)) return;
-            // Faqat ichki (relative yoki same-origin) linklar
-            try {
-                const u = new URL(href, location.href);
-                if (u.origin !== location.origin) return;
-                if (!u.hash) {
-                    u.hash = currentHash;
-                    a.setAttribute('href', u.pathname + u.search + u.hash);
-                }
-            } catch(e){}
-        }, true);
-    }
+    // Joriy Telegram foydalanuvchisining ID'si. Kesh SHU ID bilan bog'lanadi,
+    // shuning uchun bir webview ichida turli hisoblar bir-birining ismini
+    // ko'ra olmaydi.
+    const tgUserId = tg?.initDataUnsafe?.user?.id || null;
+    const CACHE_KEY = tgUserId ? `mk_user_${tgUserId}` : null;
 
     window.MK = {
-        initData: initData,
-        _hash: currentHash,
-
-        // Sahifadan sahifaga o'tishda Telegram initData hash'ini saqlaydi.
-        go(path){
-            try {
-                const u = new URL(path, location.href);
-                if (u.origin === location.origin && !u.hash && this._hash) u.hash = this._hash;
-                location.href = u.pathname + u.search + u.hash;
-            } catch(e){ location.href = path; }
-        },
+        user: null,
+        initData: tg?.initData || '',
 
         async ensureAuth(){
-            // Har chaqiruvda serverdan yangi javob olamiz — hech qanday kesh yo'q.
-            if (!this.initData) {
-                this.showOpenViaBot();
-                return null;
+            if (this.user) return this.user;
+
+            // Kesh faqat aynan shu Telegram foydalanuvchisi uchun.
+            if (CACHE_KEY) {
+                const cached = sessionStorage.getItem(CACHE_KEY);
+                if (cached) {
+                    try {
+                        const u = JSON.parse(cached);
+                        if (u && u.telegram_id === tgUserId) {
+                            this.user = u;
+                            return this.user;
+                        }
+                    } catch(e){}
+                }
             }
 
-            let user = null;
+            const tgUser = tg?.initDataUnsafe?.user;
+            const payload = this.initData
+                ? { init_data: this.initData }
+                : (tgUser ? { user: tgUser } : null);
+
+            if (!payload) return null;
+
             try {
                 const r = await fetch('/api/v1/webapp/auth', {
                     method: 'POST',
                     headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ init_data: this.initData }),
+                    body: JSON.stringify(payload),
                 });
                 if (r.status === 403) { this.showBlocked(); return null; }
                 if (r.ok) {
-                    user = await r.json();
+                    this.user = await r.json();
+                    if (CACHE_KEY && this.user && this.user.telegram_id === tgUserId) {
+                        try { sessionStorage.setItem(CACHE_KEY, JSON.stringify(this.user)); } catch(e){}
+                    }
                 }
             } catch (e) { console.warn('auth failed', e); }
 
             // Gate: unregistered users must complete /webapp/register first
-            if (user && user.is_registered === false) {
+            if (this.user && this.user.is_registered === false) {
                 const path = location.pathname;
                 if (!path.endsWith('/webapp/register') && !path.endsWith('/webapp/register/')) {
-                    this.go('/webapp/register');
+                    location.href = '/webapp/register';
+                    return this.user;
                 }
             }
-            return user;
+            return this.user;
         },
 
         authHeaders(){
             const h = {};
             if (this.initData) h['X-Init-Data'] = this.initData;
+            if (this.user?.telegram_id) h['X-Telegram-Id'] = String(this.user.telegram_id);
             return h;
-        },
-
-        showOpenViaBot(){
-            document.body.innerHTML =
-                '<div style="position:fixed;inset:0;display:flex;flex-direction:column;'
-                + 'align-items:center;justify-content:center;text-align:center;padding:32px;'
-                + 'gap:14px;background:#F9FAFB;color:#111;font-family:inherit">'
-                + '<div style="font-size:56px">🤖</div>'
-                + '<div style="font-size:1.2rem;font-weight:800">Ilovani bot orqali oching</div>'
-                + '<div style="font-size:.9rem;color:#6b7280;max-width:320px">'
-                + 'Bu sahifa Telegram bot ichida ochilishi kerak. '
-                + 'Iltimos, @muslima_darmonova_bot ga o\'ting va "Ilovani ochish" tugmasini bosing.</div></div>';
         },
 
         showBlocked(){

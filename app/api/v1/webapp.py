@@ -215,12 +215,19 @@ async def _resolve_user(
     x_init_data: str | None,
     x_tg_id: int | None,
 ) -> TelegramUser | None:
-    """Prefer signed initData, fall back to plain telegram_id in dev."""
+    """Prefer signed initData, fall back to raw telegram_id header."""
     if x_init_data:
         tg = _verify_telegram_init_data(x_init_data)
         if tg:
             user = await _get_or_create_tg_user(db, tg)
             await db.commit()
+            if user.is_banned:
+                raise HTTPException(403, "Siz bloklangansiz")
+            return user
+    if x_tg_id and int(x_tg_id) > 0:
+        result = await db.execute(select(TelegramUser).where(TelegramUser.telegram_id == int(x_tg_id)))
+        user = result.scalar_one_or_none()
+        if user:
             if user.is_banned:
                 raise HTTPException(403, "Siz bloklangansiz")
             return user
@@ -235,11 +242,19 @@ async def auth(payload: dict[str, Any], db: AsyncSession = Depends(get_db)):
     tg = _verify_telegram_init_data(init_data)
 
     if not tg:
-        # Faqat imzolangan Telegram initData qabul qilamiz. Xom `user`
-        # payload'iga ishonish orqali oldin barcha anonim tashrifchi bir xil
-        # telegram_id=999 hisobiga tushib qolar edi va bir foydalanuvchining
-        # ismini boshqalar ko'rar edi. Endi rad etamiz.
-        raise HTTPException(401, "initData tekshiruvidan o'tmadi")
+        # initData bo'lmasa, xom `user` payload'ini qabul qilamiz — LEKIN
+        # `id` majburiy va haqiqiy bo'lishi kerak (client tomondan
+        # `Telegram.WebApp.initDataUnsafe.user` dan olinadi). Bu yerda hech
+        # qanday sun'iy default (id=999 kabi) yo'q — aks holda hamma
+        # anonim tashrifchi bir hisobga tushib qolardi.
+        raw = (payload or {}).get("user") or {}
+        try:
+            uid = int(raw.get("id"))
+        except (TypeError, ValueError):
+            uid = 0
+        if uid <= 0:
+            raise HTTPException(401, "initData tekshiruvidan o'tmadi")
+        tg = raw
 
     user = await _get_or_create_tg_user(db, tg)
     await db.commit()
