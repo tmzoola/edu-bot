@@ -59,7 +59,7 @@ def setup_admin(app: FastAPI) -> None:
     )
 
     # ── Kontent (o'quv materiallari) ───────────────────────────────
-    admin.add_view(DropDown(
+    admin.add_view(DropDown(always_open=False, 
         label="Kontent",
         icon="fa fa-book-open-reader",
         views=[
@@ -76,7 +76,7 @@ def setup_admin(app: FastAPI) -> None:
     ))
 
     # ── Musobaqalar va reyting ─────────────────────────────────────
-    admin.add_view(DropDown(
+    admin.add_view(DropDown(always_open=False, 
         label="Musobaqalar",
         icon="fa fa-trophy",
         views=[
@@ -88,7 +88,7 @@ def setup_admin(app: FastAPI) -> None:
     ))
 
     # ── Foydalanuvchilar bilan aloqa ───────────────────────────────
-    admin.add_view(DropDown(
+    admin.add_view(DropDown(always_open=False, 
         label="Foydalanuvchilar",
         icon="fa fa-users",
         views=[
@@ -101,7 +101,7 @@ def setup_admin(app: FastAPI) -> None:
     ))
 
     # ── Do'kon ─────────────────────────────────────────────────────
-    admin.add_view(DropDown(
+    admin.add_view(DropDown(always_open=False, 
         label="Do'kon",
         icon="fa fa-store",
         views=[
@@ -116,7 +116,7 @@ def setup_admin(app: FastAPI) -> None:
     ))
 
     # ── Referral tizimi ────────────────────────────────────────────
-    admin.add_view(DropDown(
+    admin.add_view(DropDown(always_open=False, 
         label="Referral",
         icon="fa fa-user-plus",
         views=[
@@ -135,7 +135,7 @@ def setup_admin(app: FastAPI) -> None:
     ))
 
     # ── Guruh guard boti ───────────────────────────────────────────
-    admin.add_view(DropDown(
+    admin.add_view(DropDown(always_open=False, 
         label="Guard",
         icon="fa fa-shield-halved",
         views=[
@@ -145,7 +145,7 @@ def setup_admin(app: FastAPI) -> None:
     ))
 
     # ── Sayt sozlamalari ───────────────────────────────────────────
-    admin.add_view(DropDown(
+    admin.add_view(DropDown(always_open=False, 
         label="Sozlamalar",
         icon="fa fa-gear",
         views=[
