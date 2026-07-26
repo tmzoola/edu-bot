@@ -157,8 +157,23 @@ img,svg{display:block}
     // between accounts sharing a Telegram webview.
     try { sessionStorage.removeItem('mk_user'); } catch(e){}
 
+    // initData'ni sessionStorage'da saqlaymiz — bu foydalanuvchi ma'lumoti
+    // emas, imzolangan (HMAC bilan tekshiriladigan) token. Sabab: bot WebApp'ni
+    // `/webapp/` da ochadi, foydalanuvchi ichki sahifaga (`<a href>`) o'tganda
+    // URL'dagi `#tgWebAppData=...` hash yo'qoladi va Telegram SDK initData'ni
+    // qayta o'qiy olmaydi. Yangi WebApp seansi ochilsa, tg.initData yangisi
+    // bilan ustidan yozamiz — shuning uchun eskilik xavfi yo'q.
+    let initData = tg?.initData || '';
+    try {
+        if (initData) {
+            sessionStorage.setItem('mk_init', initData);
+        } else {
+            initData = sessionStorage.getItem('mk_init') || '';
+        }
+    } catch(e){}
+
     window.MK = {
-        initData: tg?.initData || '',
+        initData: initData,
 
         async ensureAuth(){
             // Har chaqiruvda serverdan yangi javob olamiz — hech qanday kesh yo'q.
