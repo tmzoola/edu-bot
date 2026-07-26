@@ -94,12 +94,14 @@ async def _update_user(telegram_id: int, **fields) -> TelegramUser | None:
         return user
 
 
-def _main_keyboard() -> ReplyKeyboardMarkup:
+def _main_keyboard(tg_id: int) -> ReplyKeyboardMarkup:
+    from api.v1.webapp import make_bot_token
+    token = make_bot_token(tg_id)
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(
                 text="🎓 Test ishlash",
-                web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/webapp/"),
+                web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/webapp/?t={token}"),
             )],
             [
                 KeyboardButton(text="📚 Kitoblar do'koni"),
@@ -130,7 +132,7 @@ async def _show_main_menu(msg: Message, user: TelegramUser) -> None:
         "🏆 O'z ko'rsatkichlaringizni yaxshilang\n\n"
         "👇 Quyidagi tugmalar orqali boshlang!"
     )
-    await msg.answer(text, reply_markup=_main_keyboard())
+    await msg.answer(text, reply_markup=_main_keyboard(user.telegram_id))
 
 
 def _resolve_event_photo(image_url: str | None):
@@ -183,7 +185,7 @@ async def _maybe_show_event(msg: Message) -> bool:
     # Asosiy menyu tugmalarini (reply keyboard) qayta o'rnatamiz.
     await msg.answer(
         "👇 Quyidagi tugmalar orqali boshlang!",
-        reply_markup=_main_keyboard(),
+        reply_markup=_main_keyboard(msg.from_user.id),
     )
     return True
 
@@ -285,12 +287,14 @@ async def settings_handler(msg: Message, state: FSMContext):
         "Ismni o'zgartirish uchun /change_name buyrug'ini yuboring "
         "yoki quyidagi tugma orqali WebApp sozlamalarini oching."
     )
+    from api.v1.webapp import make_bot_token
+    _tok = make_bot_token(msg.from_user.id)
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="⚙️ WebApp sozlamalari",
-                    web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/webapp/settings"),
+                    web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/webapp/settings?t={_tok}"),
                 )
             ]
         ]
@@ -360,7 +364,7 @@ async def info_handler(msg: Message):
         "📞 Murojaat uchun: @m_darmonova\n"
         "📚 Kitob admini: @attestatsiya_kitob\n\n"
         "🚀 Test ishlash uchun pastdagi tugmani bosing!",
-        reply_markup=_main_keyboard(),
+        reply_markup=_main_keyboard(msg.from_user.id),
     )
 
 

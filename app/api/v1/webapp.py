@@ -41,8 +41,46 @@ templates = Jinja2Templates(directory="templates")
 
 # ═══ HTML pages ══════════════════════════════════════════════════════
 
+def make_bot_token(telegram_id: int, ttl_seconds: int = 3600) -> str:
+    """Bot tomondan yaratiladigan qisqa muddatli imzolangan token.
+    Format: <tg_id>.<exp>.<hex_hmac>. WebApp URL'iga `?t=` sifatida qo'shiladi.
+    """
+    import time
+    exp = int(time.time()) + ttl_seconds
+    msg = f"{telegram_id}.{exp}"
+    sig = hmac.new(settings.SECRET_KEY.encode(), msg.encode(), hashlib.sha256).hexdigest()
+    return f"{msg}.{sig}"
+
+
+def _verify_bot_token(token: str) -> int | None:
+    """Tokenni tekshiradi va telegram_id qaytaradi, aks holda None."""
+    import time
+    try:
+        tg_id_s, exp_s, sig = token.split(".")
+        tg_id = int(tg_id_s)
+        exp = int(exp_s)
+        if time.time() > exp:
+            return None
+        msg = f"{tg_id_s}.{exp_s}"
+        expected = hmac.new(settings.SECRET_KEY.encode(), msg.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, sig):
+            return None
+        return tg_id
+    except Exception:  # noqa: BLE001
+        return None
+
+
 @pages.get("/", response_class=HTMLResponse)
-async def landing(request: Request, db: AsyncSession = Depends(get_db)):
+async def landing(request: Request, db: AsyncSession = Depends(get_db), t: str | None = None):
+    # Bot bergan tokenni tekshirib, session cookie'ni o'rnatamiz. Bu iOS
+    # Telegram Mini App'da initData ba'zan bo'sh kelishi muammosini yopadi.
+    if t:
+        tg_id = _verify_bot_token(t)
+        if tg_id:
+            result = await db.execute(select(TelegramUser).where(TelegramUser.telegram_id == tg_id))
+            user = result.scalar_one_or_none()
+            if user and not user.is_banned:
+                request.session["mk_tg_id"] = user.telegram_id
     row = (await db.execute(
         select(LandingContent).where(LandingContent.deletedAt.is_(None)).limit(1)
     )).scalar_one_or_none()
@@ -90,7 +128,14 @@ async def me_page(request: Request):
 
 
 @pages.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request):
+async def settings_page(request: Request, db: AsyncSession = Depends(get_db), t: str | None = None):
+    if t:
+        tg_id = _verify_bot_token(t)
+        if tg_id:
+            result = await db.execute(select(TelegramUser).where(TelegramUser.telegram_id == tg_id))
+            user = result.scalar_one_or_none()
+            if user and not user.is_banned:
+                request.session["mk_tg_id"] = user.telegram_id
     return templates.TemplateResponse("settings.html", {"request": request})
 
 

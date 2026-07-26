@@ -201,22 +201,38 @@ body{
 </div>
 
 <script>
-if(window.Telegram?.WebApp){
-  const tg=Telegram.WebApp;
-  tg.ready();tg.expand();
-  try{tg.setHeaderColor('#0b1c3f');tg.setBackgroundColor('#060f26');}catch(e){}
-  // Landing sahifada session cookie'ni o'rnatamiz — ichki sahifalarda
-  // Telegram.WebApp.initData yo'qolsa ham (iOS'da xarakterli), server
-  // cookie orqali sizni tanib oladi.
-  if (tg.initData) {
-    fetch('/api/v1/webapp/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-      body: JSON.stringify({ init_data: tg.initData }),
-      credentials: 'same-origin',
-    }).catch(function(){});
+(function(){
+  var authPromise = null;
+  var tg = window.Telegram?.WebApp;
+  if (tg) {
+    tg.ready(); tg.expand();
+    try { tg.setHeaderColor('#0b1c3f'); tg.setBackgroundColor('#060f26'); } catch(e){}
+    // Session cookie'ni o'rnatish uchun /auth chaqiramiz — ichki sahifalarda
+    // Telegram.WebApp.initData yo'qolib qolsa ham (iOS'da xarakterli), server
+    // cookie orqali sizni tanib oladi.
+    var payload = tg.initData
+      ? { init_data: tg.initData }
+      : (tg.initDataUnsafe?.user ? { user: tg.initDataUnsafe.user } : null);
+    if (payload) {
+      authPromise = fetch('/api/v1/webapp/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+        body: JSON.stringify(payload),
+        credentials: 'same-origin',
+      }).catch(function(){});
+    }
   }
-}
+
+  // "Boshlash" bosilganda auth tugashini kutib turamiz — cookie o'rnatilib
+  // ulgurmasa, keyingi sahifa 401 oladi.
+  document.addEventListener('click', function(ev){
+    var a = ev.target.closest && ev.target.closest('a.btn-start');
+    if (!a || !authPromise) return;
+    ev.preventDefault();
+    var href = a.getAttribute('href');
+    authPromise.finally(function(){ location.href = href; });
+  }, true);
+})();
 // "Boshlash" bosilganda ichki sahifaga URL hash'ni (#tgWebAppData=...) meros
 // qilib beramiz — Telegram SDK yangi sahifada initData'ni qayta o'qishi uchun.
 (function(){
