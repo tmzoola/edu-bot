@@ -205,6 +205,9 @@ if(window.Telegram?.WebApp){
   const tg=Telegram.WebApp;
   tg.ready();tg.expand();
   try{tg.setHeaderColor('#0b1c3f');tg.setBackgroundColor('#060f26');}catch(e){}
+  // Ichki sahifaga o'tganda URL hash yo'qoladi, shuning uchun initData'ni
+  // saqlab qo'yamiz. _base.html shu qiymatni o'qiydi.
+  try{ if(tg.initData){ sessionStorage.setItem('mk_init', tg.initData); } }catch(e){}
 }
 
 /* Load hero photo via fetch so we can pass ngrok-skip-browser-warning
