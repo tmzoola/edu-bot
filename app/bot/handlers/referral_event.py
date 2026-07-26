@@ -192,15 +192,14 @@ def _ticket_text(
 def _ticket_keyboard(
     links: list[tuple[TrackedChat, str]],
 ) -> InlineKeyboardMarkup:
-    share_text = "🎉 Konkursda ishtirok et! Havolalar orqali qo'shil:\n" + "\n".join(
-        url for _, url in links
-    )
+    # Inline mode orqali ulashish — do'stga rasm + matn + "Qatnashaman"
+    # tugmali xabar boradi (`bot/handlers/referral_inline.py` ni ko'ring).
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="📤 Do'stlarga ulashish",
-                    switch_inline_query=share_text,
+                    switch_inline_query="",
                 )
             ],
             [
