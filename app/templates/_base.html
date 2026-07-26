@@ -153,27 +153,45 @@ img,svg{display:block}
     const tg = window.Telegram?.WebApp;
     if (tg){ tg.ready(); tg.expand(); }
 
-    // One-time cleanup of legacy sessionStorage cache that leaked names
-    // between accounts sharing a Telegram webview.
-    try { sessionStorage.removeItem('mk_user'); } catch(e){}
+    // Eski keshni tozalash (nomlar oqib ketishi bug'idan meros).
+    try { sessionStorage.removeItem('mk_user'); sessionStorage.removeItem('mk_init'); } catch(e){}
 
-    // initData'ni sessionStorage'da saqlaymiz — bu foydalanuvchi ma'lumoti
-    // emas, imzolangan (HMAC bilan tekshiriladigan) token. Sabab: bot WebApp'ni
-    // `/webapp/` da ochadi, foydalanuvchi ichki sahifaga (`<a href>`) o'tganda
-    // URL'dagi `#tgWebAppData=...` hash yo'qoladi va Telegram SDK initData'ni
-    // qayta o'qiy olmaydi. Yangi WebApp seansi ochilsa, tg.initData yangisi
-    // bilan ustidan yozamiz — shuning uchun eskilik xavfi yo'q.
-    let initData = tg?.initData || '';
-    try {
-        if (initData) {
-            sessionStorage.setItem('mk_init', initData);
-        } else {
-            initData = sessionStorage.getItem('mk_init') || '';
-        }
-    } catch(e){}
+    // Telegram initData'ni URL hash orqali beradi (`#tgWebAppData=...`).
+    // Sahifadan sahifaga o'tganda hash yo'qoladi — shu sababli har ichki
+    // <a href> click'ida joriy hash'ni URL'ga meros qilib beramiz. Bu
+    // keshsiz va foydalanuvchilar orasida hech narsani aralashtirmaydi.
+    const initData = tg?.initData || '';
+    const currentHash = location.hash || '';
+    if (currentHash) {
+        document.addEventListener('click', function(ev){
+            const a = ev.target.closest && ev.target.closest('a[href]');
+            if (!a) return;
+            const href = a.getAttribute('href');
+            if (!href || href.startsWith('#') || /^[a-z]+:/i.test(href)) return;
+            // Faqat ichki (relative yoki same-origin) linklar
+            try {
+                const u = new URL(href, location.href);
+                if (u.origin !== location.origin) return;
+                if (!u.hash) {
+                    u.hash = currentHash;
+                    a.setAttribute('href', u.pathname + u.search + u.hash);
+                }
+            } catch(e){}
+        }, true);
+    }
 
     window.MK = {
         initData: initData,
+        _hash: currentHash,
+
+        // Sahifadan sahifaga o'tishda Telegram initData hash'ini saqlaydi.
+        go(path){
+            try {
+                const u = new URL(path, location.href);
+                if (u.origin === location.origin && !u.hash && this._hash) u.hash = this._hash;
+                location.href = u.pathname + u.search + u.hash;
+            } catch(e){ location.href = path; }
+        },
 
         async ensureAuth(){
             // Har chaqiruvda serverdan yangi javob olamiz — hech qanday kesh yo'q.
@@ -199,7 +217,7 @@ img,svg{display:block}
             if (user && user.is_registered === false) {
                 const path = location.pathname;
                 if (!path.endsWith('/webapp/register') && !path.endsWith('/webapp/register/')) {
-                    location.href = '/webapp/register';
+                    this.go('/webapp/register');
                 }
             }
             return user;
