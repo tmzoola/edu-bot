@@ -3,6 +3,15 @@ services:
     image: postgres:15-alpine
     container_name: malaka_db
     restart: always
+    # App pool (60) + guard/scripts + zaxira. 1000+ parallel foydalanuvchi
+    # uchun default 100 kam bo'lishi mumkin.
+    command: >
+      postgres
+      -c max_connections=300
+      -c shared_buffers=512MB
+      -c effective_cache_size=1536MB
+      -c work_mem=8MB
+      -c maintenance_work_mem=128MB
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-pos}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pos}
@@ -40,7 +49,12 @@ services:
       retries: 3
       start_period: 30s
 
+  # 18+ rasm aniqlash guard boti (@tozakanal_bot) — hozircha kerak emas,
+  # `profiles`ga tayinlab qo'ydik. Kerak bo'lganda:
+  #     docker compose --profile guard up -d
+  # bilan ishga tushiring. Oddiy `docker compose up -d` bunga tegmaydi.
   guard:
+    profiles: ["guard"]
     build: .
     container_name: malaka_guard
     restart: always

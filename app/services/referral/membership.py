@@ -7,6 +7,7 @@ xatolik "a'zo emas" deb talqin qilinadi.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from aiogram import Bot
@@ -60,8 +61,15 @@ async def check_subscription(
         `(True, [])` qaytadi.
     """
     chats = await get_active_tracked_chats(session)
-    missing: list[TrackedChat] = []
-    for chat in chats:
-        if not await _is_member(bot, chat_id=chat.chat_id, user_tg_id=user_tg_id):
-            missing.append(chat)
+    if not chats:
+        return (True, [])
+    # Barcha chatlarga bir vaqtda so'rov — sequential loop 3× latency edi.
+    results = await asyncio.gather(
+        *(
+            _is_member(bot, chat_id=c.chat_id, user_tg_id=user_tg_id)
+            for c in chats
+        ),
+        return_exceptions=False,
+    )
+    missing = [c for c, ok in zip(chats, results) if not ok]
     return (not missing, missing)

@@ -87,6 +87,7 @@ function render(c){
 
     if (c.my_attempt) {
         const a = c.my_attempt;
+        const canReview = (st === 'finished' || st === 'inactive');
         html += `
             <div class="result-box">
                 <h3>✅ Sizning natijangiz</h3>
@@ -98,6 +99,9 @@ function render(c){
                 <div style="margin-top:10px;font-size:.75rem;color:var(--muted);text-align:center">${a.completed_at}</div>
             </div>
             <a href="/webapp/contests/${CONTEST_ID}/winners" class="btn btn-primary">🏆 G'oliblar ro'yxati</a>
+            ${canReview
+                ? `<a href="/webapp/contests/${CONTEST_ID}/review" class="btn btn-warn" style="margin-top:10px">🔍 Javoblarim tahlili</a>`
+                : `<div style="text-align:center;font-size:.78rem;color:var(--muted);margin-top:10px">🔒 Javoblar tahlili musobaqa yakunlangach ochiladi</div>`}
         `;
     } else if (st === 'live') {
         html += `<a href="/webapp/contests/${CONTEST_ID}/play" class="btn btn-warn">🚀 Boshlash</a>
