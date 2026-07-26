@@ -63,7 +63,16 @@ async def lifespan(app: FastAPI):
     setup_admin(app)
 
     # Start Telegram bot polling
+    from aiogram.types import BotCommand, BotCommandScopeDefault
     from bot.setup import ALLOWED_UPDATES, bot, dp
+
+    try:
+        await bot.set_my_commands(
+            [BotCommand(command="start", description="Botni ishga tushirish")],
+            scope=BotCommandScopeDefault(),
+        )
+    except Exception:
+        logger.exception("set_my_commands failed")
 
     polling_task = asyncio.create_task(
         dp.start_polling(bot, skip_updates=True, allowed_updates=ALLOWED_UPDATES)
