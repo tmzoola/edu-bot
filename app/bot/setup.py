@@ -7,6 +7,7 @@ from bot.handlers import (
     referral_admin_events_router,
     referral_chat_member_router,
     referral_event_router,
+    referral_join_request_router,
     referral_menu_router,
 )
 from bot.middlewares import BlacklistMiddleware
@@ -29,14 +30,17 @@ dp.include_router(referral_chat_member_router)
 dp.include_router(referral_menu_router)
 # Referral konkurs: "✅ Obuna bo'ldim" a'zolik gate va shaxsiy linklar.
 dp.include_router(referral_event_router)
+# Kanal (va join request rejimidagi guruh) uchun invite kuzatuv + avto tasdiq.
+dp.include_router(referral_join_request_router)
 
 # Malaka bot uchun standart update ro'yxati (`getUpdates` chaqiruvida yuboriladi).
-# `my_chat_member` T-015 uchun majburiy; `chat_member` T-018 (join tracking)
-# uchun oldindan yoqib qo'yiladi.
+# `my_chat_member` T-015 uchun majburiy; `chat_member` T-018 (guruh join
+# tracking) uchun; `chat_join_request` kanalda invite kuzatuvi uchun.
 ALLOWED_UPDATES: list[str] = [
     "message",
     "edited_message",
     "callback_query",
     "my_chat_member",
     "chat_member",
+    "chat_join_request",
 ]

@@ -34,6 +34,7 @@ from models.rewards import RewardTier, UserReward
 from models.shop import BookOrder, ShopBook, ShopSettings
 from models.telegram_user import TelegramUser
 from models.topic import Topic
+from starlette_admin import DropDown
 from starlette_admin.contrib.sqla import Admin
 from starlette_admin.i18n import I18nConfig
 from starlette_admin.views import Link
@@ -57,84 +58,99 @@ def setup_admin(app: FastAPI) -> None:
         i18n_config=I18nConfig(default_locale="uz", language_header_name=None),
     )
 
-    admin.add_view(Link(
-        label="Test yaratish",
-        icon="fa fa-wand-magic-sparkles",
-        url="/admin-tools/builder",
+    # ── Kontent (o'quv materiallari) ───────────────────────────────
+    admin.add_view(DropDown(
+        label="Kontent",
+        icon="fa fa-book-open-reader",
+        views=[
+            Link(label="Test yaratish", icon="fa fa-wand-magic-sparkles",
+                 url="/admin-tools/builder"),
+            Link(label="Kitob yuklash", icon="fa fa-file-arrow-up",
+                 url="/admin-tools/books"),
+            ModuleAdminView(Module, identity="modul"),
+            TopicAdminView(Topic, identity="mavzu"),
+            QuizAdminView(Quiz, identity="test"),
+            QuestionAdminView(Question, identity="savol"),
+            BookAdminView(Book, identity="kitob"),
+        ],
     ))
-    admin.add_view(Link(
-        label="Yutuqli testlar",
-        icon="fa fa-trophy",
-        url="/admin-tools/contests",
-    ))
-    admin.add_view(Link(
-        label="Kitob yuklash",
-        icon="fa fa-file-arrow-up",
-        url="/admin-tools/books",
-    ))
-    admin.add_view(Link(
-        label="Reyting",
-        icon="fa fa-trophy",
-        url="/admin-tools/leaderboard",
-    ))
-    admin.add_view(Link(
-        label="Motivatsiya",
-        icon="fa fa-quote-left",
-        url="/admin-tools/quotes",
-    ))
-    admin.add_view(Link(
-        label="Xabar yuborish",
-        icon="fa fa-bullhorn",
-        url="/admin-tools/broadcast",
-    ))
-    admin.add_view(ModuleAdminView(Module, identity="modul"))
-    admin.add_view(TopicAdminView(Topic, identity="mavzu"))
-    admin.add_view(QuizAdminView(Quiz, identity="test"))
-    admin.add_view(QuestionAdminView(Question, identity="savol"))
-    admin.add_view(BookAdminView(Book, identity="kitob"))
-    admin.add_view(TelegramUserAdminView(TelegramUser, identity="foydalanuvchi"))
-    admin.add_view(LandingContentAdminView(LandingContent, identity="bosh-sahifa-matni"))
-    admin.add_view(ShopSettingsView(ShopSettings, identity="dokon-sozlama"))
-    admin.add_view(ShopBookView(ShopBook, identity="dokon-kitob"))
-    admin.add_view(BookOrderView(BookOrder, identity="buyurtma"))
 
-    # --- Guruh guard boti jadvallari ---
-    admin.add_view(JoinEventAdminView(JoinEvent, identity="guard-qoshilish"))
-    admin.add_view(FlaggedUserAdminView(FlaggedUser, identity="guard-ogohlantirish"))
+    # ── Musobaqalar va reyting ─────────────────────────────────────
+    admin.add_view(DropDown(
+        label="Musobaqalar",
+        icon="fa fa-trophy",
+        views=[
+            Link(label="Yutuqli testlar", icon="fa fa-trophy",
+                 url="/admin-tools/contests"),
+            Link(label="Reyting", icon="fa fa-ranking-star",
+                 url="/admin-tools/leaderboard"),
+        ],
+    ))
 
-    # --- Referral (taklif) tizimi ---
-    admin.add_view(
-        ReferralEventAdminView(ReferralEvent, identity="referral-event")
-    )
-    admin.add_view(
-        ReferralEventParticipantAdminView(
-            ReferralEventParticipant, identity="referral-event-participant"
-        )
-    )
-    admin.add_view(TrackedChatAdminView(TrackedChat, identity="referral-tracked-chat"))
-    admin.add_view(InviteLinkAdminView(InviteLink, identity="referral-invite-link"))
-    admin.add_view(InviteJoinAdminView(InviteJoin, identity="referral-invite-join"))
-    admin.add_view(
-        RewardTierAdminView(RewardTier, identity="referral-reward-tier")
-    )
-    admin.add_view(
-        UserRewardAdminView(UserReward, identity="referral-user-reward")
-    )
-    admin.add_view(Link(
-        label="Referral: Top inviterlar",
+    # ── Foydalanuvchilar bilan aloqa ───────────────────────────────
+    admin.add_view(DropDown(
+        label="Foydalanuvchilar",
+        icon="fa fa-users",
+        views=[
+            TelegramUserAdminView(TelegramUser, identity="foydalanuvchi"),
+            Link(label="Xabar yuborish", icon="fa fa-bullhorn",
+                 url="/admin-tools/broadcast"),
+            Link(label="Motivatsiya", icon="fa fa-quote-left",
+                 url="/admin-tools/quotes"),
+        ],
+    ))
+
+    # ── Do'kon ─────────────────────────────────────────────────────
+    admin.add_view(DropDown(
+        label="Do'kon",
+        icon="fa fa-store",
+        views=[
+            Link(label="Do'kon kitoblari", icon="fa fa-book-open",
+                 url="/admin-tools/shop-books"),
+            Link(label="Buyurtmalar boshqaruvi", icon="fa fa-box-open",
+                 url="/admin-tools/orders"),
+            ShopSettingsView(ShopSettings, identity="dokon-sozlama"),
+            ShopBookView(ShopBook, identity="dokon-kitob"),
+            BookOrderView(BookOrder, identity="buyurtma"),
+        ],
+    ))
+
+    # ── Referral tizimi ────────────────────────────────────────────
+    admin.add_view(DropDown(
+        label="Referral",
         icon="fa fa-user-plus",
-        url="/admin-tools/referral-leaderboard",
+        views=[
+            Link(label="Top inviterlar", icon="fa fa-medal",
+                 url="/admin-tools/referral-leaderboard"),
+            ReferralEventAdminView(ReferralEvent, identity="referral-event"),
+            ReferralEventParticipantAdminView(
+                ReferralEventParticipant, identity="referral-event-participant"
+            ),
+            TrackedChatAdminView(TrackedChat, identity="referral-tracked-chat"),
+            InviteLinkAdminView(InviteLink, identity="referral-invite-link"),
+            InviteJoinAdminView(InviteJoin, identity="referral-invite-join"),
+            RewardTierAdminView(RewardTier, identity="referral-reward-tier"),
+            UserRewardAdminView(UserReward, identity="referral-user-reward"),
+        ],
     ))
 
-    admin.add_view(Link(
-        label="Buyurtmalar boshqaruvi",
-        icon="fa fa-box-open",
-        url="/admin-tools/orders",
+    # ── Guruh guard boti ───────────────────────────────────────────
+    admin.add_view(DropDown(
+        label="Guard",
+        icon="fa fa-shield-halved",
+        views=[
+            JoinEventAdminView(JoinEvent, identity="guard-qoshilish"),
+            FlaggedUserAdminView(FlaggedUser, identity="guard-ogohlantirish"),
+        ],
     ))
-    admin.add_view(Link(
-        label="Do'kon kitoblari",
-        icon="fa fa-book-open",
-        url="/admin-tools/shop-books",
+
+    # ── Sayt sozlamalari ───────────────────────────────────────────
+    admin.add_view(DropDown(
+        label="Sozlamalar",
+        icon="fa fa-gear",
+        views=[
+            LandingContentAdminView(LandingContent, identity="bosh-sahifa-matni"),
+        ],
     ))
 
     admin.mount_to(app)

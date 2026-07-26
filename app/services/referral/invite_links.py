@@ -70,11 +70,15 @@ async def get_or_create_invite_link(
         return existing
 
     link_name = f"u{user_id}"
+    # Kanallarda Telegram `chat_member` update yubormaydi — invite kuzatuvi
+    # faqat `chat_join_request` orqali ishlaydi. Shuning uchun kanal uchun
+    # `creates_join_request=True` bilan yaratamiz (bot avto tasdiqlaydi).
+    creates_join_request = tracked.type == "channel"
     try:
         tg_link = await bot.create_chat_invite_link(
             chat_id=tracked.chat_id,
             name=link_name,
-            creates_join_request=False,
+            creates_join_request=creates_join_request,
         )
     except TelegramRetryAfter as exc:
         logger.warning(

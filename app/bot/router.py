@@ -266,6 +266,11 @@ async def register_full_name(msg: Message, state: FSMContext):
         return
 
     await msg.answer("🎉 Ro'yxatdan o'tdingiz!")
+
+    # Aktiv referral konkurs bo'lsa e'londan avval ko'rsatamiz — yangi
+    # foydalanuvchi /start ni ikkinchi marta bosishga majbur bo'lmasin.
+    if await _maybe_show_event(msg):
+        return
     await _show_main_menu(msg, user)
 
 
