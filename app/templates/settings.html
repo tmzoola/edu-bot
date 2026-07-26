@@ -75,7 +75,6 @@ document.getElementById('save').addEventListener('click', async () => {
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.detail || 'Xatolik');
-        if (MK.user) { MK.user.first_name = d.first_name; MK.user.last_name = d.last_name; }
         MK.haptic('success');
         showMsg('ok', "✅ Saqlandi");
     } catch(e){

@@ -158,20 +158,16 @@ img,svg{display:block}
     try { sessionStorage.removeItem('mk_user'); } catch(e){}
 
     window.MK = {
-        user: null,
         initData: tg?.initData || '',
 
         async ensureAuth(){
-            if (this.user) return this.user;
-
-            // WebApp faqat Telegram ichida ochilishi kerak. initData bo'lmasa
-            // — link kanaldan/brauzerdan ochilgan; anonim foydalanuvchi
-            // yaratmaymiz, aksincha yo'l ko'rsatuvchi ekran chiqaramiz.
+            // Har chaqiruvda serverdan yangi javob olamiz — hech qanday kesh yo'q.
             if (!this.initData) {
                 this.showOpenViaBot();
                 return null;
             }
 
+            let user = null;
             try {
                 const r = await fetch('/api/v1/webapp/auth', {
                     method: 'POST',
@@ -180,25 +176,23 @@ img,svg{display:block}
                 });
                 if (r.status === 403) { this.showBlocked(); return null; }
                 if (r.ok) {
-                    this.user = await r.json();
+                    user = await r.json();
                 }
             } catch (e) { console.warn('auth failed', e); }
 
             // Gate: unregistered users must complete /webapp/register first
-            if (this.user && this.user.is_registered === false) {
+            if (user && user.is_registered === false) {
                 const path = location.pathname;
                 if (!path.endsWith('/webapp/register') && !path.endsWith('/webapp/register/')) {
                     location.href = '/webapp/register';
-                    return this.user;
                 }
             }
-            return this.user;
+            return user;
         },
 
         authHeaders(){
             const h = {};
             if (this.initData) h['X-Init-Data'] = this.initData;
-            if (this.user?.telegram_id) h['X-Telegram-Id'] = String(this.user.telegram_id);
             return h;
         },
 
