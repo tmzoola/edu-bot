@@ -147,6 +147,8 @@ img,svg{display:block}
     const _fetch = window.fetch.bind(window);
     window.fetch = (input, init = {}) => {
         init.headers = Object.assign({}, init.headers, { 'ngrok-skip-browser-warning': 'true' });
+        // Session cookie'ni har chaqiruvda yuborish uchun.
+        if (!init.credentials) init.credentials = 'same-origin';
         return _fetch(input, init);
     };
 
@@ -207,15 +209,16 @@ img,svg{display:block}
             const tgUser = tg?.initDataUnsafe?.user;
             const payload = this.initData
                 ? { init_data: this.initData }
-                : (tgUser ? { user: tgUser } : null);
-
-            if (!payload) return null;
+                : (tgUser ? { user: tgUser } : {});
+            // Bo'sh payload bo'lsa ham /auth chaqiramiz — server session cookie
+            // orqali (landing sahifada o'rnatilgan) sizni topa oladi.
 
             try {
                 const r = await fetch('/api/v1/webapp/auth', {
                     method: 'POST',
                     headers: {'Content-Type':'application/json'},
                     body: JSON.stringify(payload),
+                    credentials: 'same-origin',
                 });
                 if (r.status === 403) { this.showBlocked(); return null; }
                 if (r.ok) {

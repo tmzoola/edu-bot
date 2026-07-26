@@ -205,6 +205,17 @@ if(window.Telegram?.WebApp){
   const tg=Telegram.WebApp;
   tg.ready();tg.expand();
   try{tg.setHeaderColor('#0b1c3f');tg.setBackgroundColor('#060f26');}catch(e){}
+  // Landing sahifada session cookie'ni o'rnatamiz — ichki sahifalarda
+  // Telegram.WebApp.initData yo'qolsa ham (iOS'da xarakterli), server
+  // cookie orqali sizni tanib oladi.
+  if (tg.initData) {
+    fetch('/api/v1/webapp/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+      body: JSON.stringify({ init_data: tg.initData }),
+      credentials: 'same-origin',
+    }).catch(function(){});
+  }
 }
 // "Boshlash" bosilganda ichki sahifaga URL hash'ni (#tgWebAppData=...) meros
 // qilib beramiz — Telegram SDK yangi sahifada initData'ni qayta o'qishi uchun.

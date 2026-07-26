@@ -214,8 +214,9 @@ async def _resolve_user(
     db: AsyncSession,
     x_init_data: str | None,
     x_tg_id: int | None,
+    request: Request | None = None,
 ) -> TelegramUser | None:
-    """Prefer signed initData, fall back to raw telegram_id header."""
+    """Prefer signed initData, then session cookie, then raw telegram_id."""
     if x_init_data:
         tg = _verify_telegram_init_data(x_init_data)
         if tg:
@@ -223,7 +224,19 @@ async def _resolve_user(
             await db.commit()
             if user.is_banned:
                 raise HTTPException(403, "Siz bloklangansiz")
+            if request is not None:
+                request.session["mk_tg_id"] = user.telegram_id
             return user
+    # Session cookie'da saqlangan telegram_id (landing sahifada auth qilingan)
+    if request is not None:
+        sess_tg = request.session.get("mk_tg_id")
+        if sess_tg:
+            result = await db.execute(select(TelegramUser).where(TelegramUser.telegram_id == int(sess_tg)))
+            user = result.scalar_one_or_none()
+            if user:
+                if user.is_banned:
+                    raise HTTPException(403, "Siz bloklangansiz")
+                return user
     if x_tg_id and int(x_tg_id) > 0:
         result = await db.execute(select(TelegramUser).where(TelegramUser.telegram_id == int(x_tg_id)))
         user = result.scalar_one_or_none()
@@ -237,30 +250,38 @@ async def _resolve_user(
 # ═══ Auth endpoint ═══════════════════════════════════════════════════
 
 @api.post("/auth")
-async def auth(payload: dict[str, Any], db: AsyncSession = Depends(get_db)):
+async def auth(request: Request, payload: dict[str, Any], db: AsyncSession = Depends(get_db)):
     init_data = (payload or {}).get("init_data") or ""
     tg = _verify_telegram_init_data(init_data)
 
     if not tg:
-        # initData bo'lmasa, xom `user` payload'ini qabul qilamiz — LEKIN
-        # `id` majburiy va haqiqiy bo'lishi kerak (client tomondan
-        # `Telegram.WebApp.initDataUnsafe.user` dan olinadi). Bu yerda hech
-        # qanday sun'iy default (id=999 kabi) yo'q — aks holda hamma
-        # anonim tashrifchi bir hisobga tushib qolardi.
         raw = (payload or {}).get("user") or {}
         try:
             uid = int(raw.get("id"))
         except (TypeError, ValueError):
             uid = 0
-        if uid <= 0:
-            raise HTTPException(401, "initData tekshiruvidan o'tmadi")
-        tg = raw
+        if uid > 0:
+            tg = raw
 
-    user = await _get_or_create_tg_user(db, tg)
-    await db.commit()
+    user: TelegramUser | None = None
+    if tg:
+        user = await _get_or_create_tg_user(db, tg)
+        await db.commit()
+    else:
+        # initData/user yo'q — session cookie orqali topamiz (landing'da o'rnatilgan)
+        sess_tg = request.session.get("mk_tg_id")
+        if sess_tg:
+            result = await db.execute(select(TelegramUser).where(TelegramUser.telegram_id == int(sess_tg)))
+            user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(401, "initData tekshiruvidan o'tmadi")
 
     if user.is_banned:
         raise HTTPException(403, "Siz bloklangansiz")
+
+    # Session cookie'ni yangilaymiz — keyingi sahifalar initData'siz auth qila oladi.
+    request.session["mk_tg_id"] = user.telegram_id
 
     return {
         "id": user.id,
@@ -496,8 +517,9 @@ async def submit_quiz(
     db: AsyncSession = Depends(get_db),
     x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
     x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+    request: Request = None,  # noqa: B008 — starlette Request is injected
 ):
-    user = await _resolve_user(db, x_init_data, x_tg_id)
+    user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if not user:
         raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
 
@@ -704,8 +726,9 @@ async def get_me(
     db: AsyncSession = Depends(get_db),
     x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
     x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+    request: Request = None,  # noqa: B008 — starlette Request is injected
 ):
-    user = await _resolve_user(db, x_init_data, x_tg_id)
+    user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if not user:
         raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
     return {
@@ -725,8 +748,9 @@ async def update_me(
     db: AsyncSession = Depends(get_db),
     x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
     x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+    request: Request = None,  # noqa: B008 — starlette Request is injected
 ):
-    user = await _resolve_user(db, x_init_data, x_tg_id)
+    user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if not user:
         raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
 
@@ -762,8 +786,9 @@ async def my_progress(
     db: AsyncSession = Depends(get_db),
     x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
     x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+    request: Request = None,  # noqa: B008 — starlette Request is injected
 ):
-    user = await _resolve_user(db, x_init_data, x_tg_id)
+    user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if not user:
         raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
 
@@ -812,6 +837,7 @@ async def quote_today(
     db: AsyncSession = Depends(get_db),
     x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
     x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+    request: Request = None,  # noqa: B008 — starlette Request is injected
 ):
     from models.quote import MotivationalQuote
 
@@ -824,7 +850,7 @@ async def quote_today(
     if not quotes:
         return {"text": None, "name": None}
 
-    user = await _resolve_user(db, x_init_data, x_tg_id)
+    user = await _resolve_user(db, x_init_data, x_tg_id, request)
     seed_parts = [date.today().isoformat()]
     if user:
         seed_parts.append(str(user.id))
@@ -1018,6 +1044,7 @@ async def get_daily(
     db: AsyncSession = Depends(get_db),
     x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
     x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+    request: Request = None,  # noqa: B008 — starlette Request is injected
 ):
     topic, questions = await _daily_selection(db)
     if not topic or not questions:
@@ -1046,7 +1073,7 @@ async def get_daily(
         "today_result": None,
     }
 
-    user = await _resolve_user(db, x_init_data, x_tg_id)
+    user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if user:
         daily_quiz = await _get_or_create_daily_quiz(db)
         if daily_quiz:
@@ -1070,8 +1097,9 @@ async def submit_daily(
     db: AsyncSession = Depends(get_db),
     x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
     x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+    request: Request = None,  # noqa: B008 — starlette Request is injected
 ):
-    user = await _resolve_user(db, x_init_data, x_tg_id)
+    user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if not user:
         raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
 
@@ -1159,6 +1187,7 @@ async def list_contests(
     db: AsyncSession = Depends(get_db),
     x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
     x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+    request: Request = None,  # noqa: B008 — starlette Request is injected
 ):
     rows = (
         await db.execute(
@@ -1166,7 +1195,7 @@ async def list_contests(
         )
     ).scalars().all()
 
-    user = await _resolve_user(db, x_init_data, x_tg_id)
+    user = await _resolve_user(db, x_init_data, x_tg_id, request)
     my_ids: set[int] = set()
     if user:
         my_rows = await db.execute(
@@ -1205,6 +1234,7 @@ async def get_contest(
     db: AsyncSession = Depends(get_db),
     x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
     x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+    request: Request = None,  # noqa: B008 — starlette Request is injected
 ):
     contest = await db.get(Contest, contest_id)
     if not contest or not contest.is_active:
@@ -1215,7 +1245,7 @@ async def get_contest(
     ) or 0
 
     my_attempt = None
-    user = await _resolve_user(db, x_init_data, x_tg_id)
+    user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if user:
         r = await db.execute(
             select(ContestAttempt).where(
@@ -1255,8 +1285,9 @@ async def get_contest_questions(
     db: AsyncSession = Depends(get_db),
     x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
     x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+    request: Request = None,  # noqa: B008 — starlette Request is injected
 ):
-    user = await _resolve_user(db, x_init_data, x_tg_id)
+    user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if not user:
         raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
 
@@ -1306,8 +1337,9 @@ async def submit_contest(
     db: AsyncSession = Depends(get_db),
     x_init_data: str | None = Header(default=None, alias="X-Init-Data"),
     x_tg_id: int | None = Header(default=None, alias="X-Telegram-Id"),
+    request: Request = None,  # noqa: B008 — starlette Request is injected
 ):
-    user = await _resolve_user(db, x_init_data, x_tg_id)
+    user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if not user:
         raise HTTPException(401, "Foydalanuvchi aniqlanmadi")
 
@@ -1459,8 +1491,9 @@ async def my_orders(
     x_init_data: str | None = Header(None),
     x_tg_id: int | None = Header(None),
     db: AsyncSession = Depends(get_db),
+    request: Request = None,  # noqa: B008
 ):
-    user = await _resolve_user(db, x_init_data, x_tg_id)
+    user = await _resolve_user(db, x_init_data, x_tg_id, request)
     if not user:
         raise HTTPException(401, "Autentifikatsiya talab etiladi")
 
