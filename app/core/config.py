@@ -31,7 +31,6 @@ BOOK_CATEGORIES = [
 
 
 class Settings(BaseSettings):
-    APP_MODE: str = "DEV"
     DEBUG: bool = False
     SECRET_KEY: str
 

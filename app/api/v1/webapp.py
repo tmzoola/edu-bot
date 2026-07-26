@@ -224,18 +224,6 @@ async def _resolve_user(
             if user.is_banned:
                 raise HTTPException(403, "Siz bloklangansiz")
             return user
-    if x_tg_id and settings.APP_MODE != "PRODUCTION":
-        # Dev fallback so we can test without Telegram WebApp environment
-        result = await db.execute(select(TelegramUser).where(TelegramUser.telegram_id == x_tg_id))
-        user = result.scalar_one_or_none()
-        if not user:
-            user = TelegramUser(telegram_id=x_tg_id, first_name="Dev")
-            db.add(user)
-            await db.commit()
-            await db.refresh(user)
-        if user.is_banned:
-            raise HTTPException(403, "Siz bloklangansiz")
-        return user
     return None
 
 
@@ -246,11 +234,11 @@ async def auth(payload: dict[str, Any], db: AsyncSession = Depends(get_db)):
     init_data = (payload or {}).get("init_data") or ""
     tg = _verify_telegram_init_data(init_data)
 
-    if not tg and settings.APP_MODE != "PRODUCTION":
-        # Dev fallback: accept a raw {"user": {...}}
-        tg = (payload or {}).get("user")
-
     if not tg:
+        # Faqat imzolangan Telegram initData qabul qilamiz. Xom `user`
+        # payload'iga ishonish orqali oldin barcha anonim tashrifchi bir xil
+        # telegram_id=999 hisobiga tushib qolar edi va bir foydalanuvchining
+        # ismini boshqalar ko'rar edi. Endi rad etamiz.
         raise HTTPException(401, "initData tekshiruvidan o'tmadi")
 
     user = await _get_or_create_tg_user(db, tg)

@@ -164,16 +164,19 @@ img,svg{display:block}
         async ensureAuth(){
             if (this.user) return this.user;
 
-            const tgUser = tg?.initDataUnsafe?.user;
-            const payload = this.initData
-                ? { init_data: this.initData }
-                : { user: tgUser || { id: 999, first_name: 'Dev' } };  // dev fallback
+            // WebApp faqat Telegram ichida ochilishi kerak. initData bo'lmasa
+            // — link kanaldan/brauzerdan ochilgan; anonim foydalanuvchi
+            // yaratmaymiz, aksincha yo'l ko'rsatuvchi ekran chiqaramiz.
+            if (!this.initData) {
+                this.showOpenViaBot();
+                return null;
+            }
 
             try {
                 const r = await fetch('/api/v1/webapp/auth', {
                     method: 'POST',
                     headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify(payload),
+                    body: JSON.stringify({ init_data: this.initData }),
                 });
                 if (r.status === 403) { this.showBlocked(); return null; }
                 if (r.ok) {
@@ -197,6 +200,18 @@ img,svg{display:block}
             if (this.initData) h['X-Init-Data'] = this.initData;
             if (this.user?.telegram_id) h['X-Telegram-Id'] = String(this.user.telegram_id);
             return h;
+        },
+
+        showOpenViaBot(){
+            document.body.innerHTML =
+                '<div style="position:fixed;inset:0;display:flex;flex-direction:column;'
+                + 'align-items:center;justify-content:center;text-align:center;padding:32px;'
+                + 'gap:14px;background:#F9FAFB;color:#111;font-family:inherit">'
+                + '<div style="font-size:56px">🤖</div>'
+                + '<div style="font-size:1.2rem;font-weight:800">Ilovani bot orqali oching</div>'
+                + '<div style="font-size:.9rem;color:#6b7280;max-width:320px">'
+                + 'Bu sahifa Telegram bot ichida ochilishi kerak. '
+                + 'Iltimos, @muslima_darmonova_bot ga o\'ting va "Ilovani ochish" tugmasini bosing.</div></div>';
         },
 
         showBlocked(){
