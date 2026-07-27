@@ -191,9 +191,14 @@ async def _maybe_show_event(msg: Message) -> bool:
 
 @router.message(CommandStart())
 async def start_handler(msg: Message, state: FSMContext, command: CommandObject):
-    # Referral/konkurs oqimi faqat shaxsiy chatda ishlaydi. Guruh/kanalда bot
-    # admin bo'lsa ham /start ga javob yozmasin (aks holda guruhga spam bo'ladi).
+    # Referral/konkurs oqimi faqat shaxsiy chatda ishlaydi. Guruh/kanalда a'zolar
+    # deep-link bosganda Telegram `/start@bot` ni guruhga yuboradi — bu foydasiz
+    # clutter. Bot admin bo'lsa o'sha buyruq xabarini o'chiramiz; javob yozmaymiz.
     if msg.chat.type != "private":
+        try:
+            await msg.delete()
+        except Exception:  # noqa: BLE001 — o'chirish huquqi yo'q bo'lishi mumkin
+            pass
         return
     await state.clear()
     user = await get_or_create_user(msg.from_user)
