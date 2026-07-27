@@ -19,19 +19,23 @@ from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
 )
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from core.exceptions import AppException
 from db.session import session_factory
-from models.referral import InviteLink, TrackedChat
+from models.referral import TrackedChat
 from models.telegram_user import TelegramUser
 from services.referral.events import (
     REFRESH_CB,
     SUBSCRIBED_CB,
     chat_join_url,
+    count_referral_on_gate,
     get_active_event,
     get_active_tracked_chats,
     get_or_create_participant,
+    referral_deeplink,
+    referral_ticket_count,
+    share_button,
 )
 from services.referral.invite_links import get_or_create_invite_link
 from services.referral.membership import check_subscription
@@ -65,20 +69,6 @@ async def _get_user(tg_id: int) -> TelegramUser | None:
                 select(TelegramUser).where(TelegramUser.telegram_id == tg_id)
             )
         ).scalar_one_or_none()
-
-
-async def _total_tickets(session, user_id: int) -> int:
-    """Foydalanuvchining barcha faol linklari bo'yicha jami chipta soni."""
-    return int(
-        (
-            await session.execute(
-                select(func.coalesce(func.sum(InviteLink.join_count), 0)).where(
-                    InviteLink.user_id == user_id,
-                    InviteLink.revoked_at.is_(None),
-                )
-            )
-        ).scalar_one()
-    )
 
 
 @router.callback_query(F.data.in_({SUBSCRIBED_CB, REFRESH_CB}))
@@ -120,7 +110,7 @@ async def on_subscribed(cb: CallbackQuery, bot: Bot) -> None:
         )
         return
 
-    # Barcha chatlarga a'zo — ishtirokchi raqami + shaxsiy linklar.
+    # Barcha chatlarga a'zo — ishtirokchi raqami + shaxsiy deep-link.
     try:
         async with session_factory() as session:
             participant = await get_or_create_participant(
@@ -128,18 +118,32 @@ async def on_subscribed(cb: CallbackQuery, bot: Bot) -> None:
             )
             number = participant.number
 
+            # Obuna gate'dan o'tdi — bizni taklif qilgan bo'lsa unga chipta.
+            await count_referral_on_gate(
+                session,
+                event_id=event.id,
+                invited_tg_id=cb.from_user.id,
+                invited_user_id=user.id,
+            )
+
+            # Ixtiyoriy: faol tracked kanal/guruh bo'lsa, shaxsiy invite linklar.
             chats = await get_active_tracked_chats(session)
             links: list[tuple[TrackedChat, str]] = []
             for chat in chats:
-                invite = await get_or_create_invite_link(
-                    session,
-                    bot,
-                    user_id=user.id,
-                    tracked_chat_id=chat.id,
-                )
-                links.append((chat, invite.invite_link))
+                try:
+                    invite = await get_or_create_invite_link(
+                        session, bot, user_id=user.id, tracked_chat_id=chat.id
+                    )
+                    links.append((chat, invite.invite_link))
+                except Exception:  # noqa: BLE001
+                    logger.exception(
+                        "referral_event: invite link olib bo'lmadi chat=%s user=%s",
+                        chat.id, user.id,
+                    )
 
-            tickets = await _total_tickets(session, user.id)
+            tickets = await referral_ticket_count(
+                session, event_id=event.id, inviter_user_id=user.id
+            )
     except AppException as exc:
         await cb.message.answer(f"⚠️ {exc.detail}")
         return
@@ -154,9 +158,10 @@ async def on_subscribed(cb: CallbackQuery, bot: Bot) -> None:
         )
         return
 
+    deeplink = referral_deeplink(cb.from_user.id)
     await cb.message.answer(
-        _ticket_text(event, number=number, tickets=tickets, links=links),
-        reply_markup=_ticket_keyboard(links),
+        _ticket_text(event, number=number, tickets=tickets, links=links, deeplink=deeplink),
+        reply_markup=_ticket_keyboard(cb.from_user.id, event.announcement_text),
         disable_web_page_preview=True,
     )
 
@@ -167,6 +172,7 @@ def _ticket_text(
     number: int,
     tickets: int,
     links: list[tuple[TrackedChat, str]],
+    deeplink: str,
 ) -> str:
     header = event.success_text or (
         "🎉 <b>Tabriklaymiz! Siz konkursda ishtirok etyapsiz!</b>"
@@ -176,32 +182,31 @@ def _ticket_text(
         "",
         f"👤 Ishtirokchi <b>№{number}</b> · Chiptalaringiz: <b>{tickets}</b>",
         "",
-        "🔗 <b>Sizning shaxsiy taklif havolalaringiz:</b>",
+        "🔗 <b>Sizning shaxsiy taklif havolangiz:</b>",
+        deeplink,
     ]
-    for chat, url in links:
-        icon = "📢" if chat.type == "channel" else "👥"
-        lines.append(f"{icon} {chat.title}:\n<code>{url}</code>")
+    if links:
+        lines.append("")
+        lines.append("📌 Kanal/guruh havolalari:")
+        for chat, url in links:
+            icon = "📢" if chat.type == "channel" else "👥"
+            lines.append(f"{icon} {chat.title}:\n<code>{url}</code>")
     lines += [
         "",
-        "👥 Har bir do'stingiz shu havolalar orqali qo'shilsa — sizga <b>+1 chipta</b>! 🎫",
+        "👥 Do'stingiz shu havola orqali botga kirib obuna bo'lsa — sizga <b>+1 chipta</b>! 🎫",
         "🏆 Eng ko'p taklif qilgan ishtirokchilar g'olib bo'ladi!",
     ]
     return "\n".join(lines)
 
 
 def _ticket_keyboard(
-    links: list[tuple[TrackedChat, str]],
+    inviter_tg_id: int, announcement_text: str | None
 ) -> InlineKeyboardMarkup:
-    # Inline mode orqali ulashish — do'stga rasm + matn + "Qatnashaman"
-    # tugmali xabar boradi (`bot/handlers/referral_inline.py` ni ko'ring).
+    # `t.me/share/url` orqali ulashish — inline mode talab qilmaydi, do'stga
+    # to'liq promo matn + shaxsiy deep-link yuboriladi.
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📤 Do'stlarga ulashish",
-                    switch_inline_query="",
-                )
-            ],
+            [share_button(inviter_tg_id, announcement_text)],
             [
                 InlineKeyboardButton(
                     text="🔄 Chiptalarni yangilash", callback_data=REFRESH_CB

@@ -11,14 +11,21 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from urllib.parse import quote
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.config import settings
 from models.referral import TrackedChat
-from models.referral_event import ReferralEvent, ReferralEventParticipant
+from models.referral_event import (
+    EventReferral,
+    ReferralEvent,
+    ReferralEventParticipant,
+)
+from models.telegram_user import TelegramUser
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +123,121 @@ async def _get_participant(
     ).scalar_one_or_none()
 
 
+# Bot ishga tushganda `get_me` orqali aniqlanadigan haqiqiy username. Shu tufayli
+# deep-link doim ishlab turgan botga to'g'ri keladi (config qiymatiga bog'liq emas).
+_BOT_USERNAME: str | None = None
+
+
+def set_bot_username(username: str | None) -> None:
+    """Bot startupida haqiqiy username'ni keshlaydi (`bot_main.py` chaqiradi)."""
+    global _BOT_USERNAME
+    if username:
+        _BOT_USERNAME = username.lstrip("@")
+
+
+def referral_deeplink(inviter_tg_id: int) -> str:
+    """Taklif qiluvchining bot deep-link havolasi (`?start=ref_<id>`).
+
+    Username: avval runtime'da aniqlangan (`get_me`), bo'lmasa `settings.BOT_USERNAME`.
+    """
+    username = _BOT_USERNAME or settings.BOT_USERNAME
+    return f"https://t.me/{username}?start=ref_{inviter_tg_id}"
+
+
+async def record_referral(
+    session: AsyncSession,
+    *,
+    event_id: int,
+    inviter_tg_id: int,
+    invited_tg_id: int,
+) -> None:
+    """`/start ref_<inviter>` bosilganda kutilayotgan referralni yozadi.
+
+    Idempotent: self-invite bloklanadi, bir eventda bir taklif qilingan
+    foydalanuvchi faqat bir marta yoziladi (birinchi taklif qiluvchi g'olib).
+    """
+    if inviter_tg_id == invited_tg_id:
+        return
+
+    inviter = (
+        await session.execute(
+            select(TelegramUser).where(TelegramUser.telegram_id == inviter_tg_id)
+        )
+    ).scalar_one_or_none()
+    if inviter is None:
+        return
+
+    existing = (
+        await session.execute(
+            select(EventReferral.id).where(
+                EventReferral.event_id == event_id,
+                EventReferral.invited_tg_id == invited_tg_id,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        return
+
+    session.add(
+        EventReferral(
+            event_id=event_id,
+            inviter_user_id=inviter.id,
+            invited_tg_id=invited_tg_id,
+            counted=False,
+        )
+    )
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()  # poyga — boshqa so'rov yozib ulgurgan
+
+
+async def count_referral_on_gate(
+    session: AsyncSession,
+    *,
+    event_id: int,
+    invited_tg_id: int,
+    invited_user_id: int,
+) -> None:
+    """Taklif qilingan foydalanuvchi obuna gate'dan o'tganda referralni hisoblaydi."""
+    row = (
+        await session.execute(
+            select(EventReferral).where(
+                EventReferral.event_id == event_id,
+                EventReferral.invited_tg_id == invited_tg_id,
+                EventReferral.counted.is_(False),
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return
+    # O'z-o'ziga referral bo'lmasligi uchun qo'shimcha himoya.
+    if row.inviter_user_id == invited_user_id:
+        return
+    row.counted = True
+    row.invited_user_id = invited_user_id
+    await session.commit()
+
+
+async def referral_ticket_count(
+    session: AsyncSession, *, event_id: int, inviter_user_id: int
+) -> int:
+    """Taklif qiluvchining shu eventdagi hisoblangan chiptalari soni."""
+    return int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(EventReferral)
+                .where(
+                    EventReferral.event_id == event_id,
+                    EventReferral.inviter_user_id == inviter_user_id,
+                    EventReferral.counted.is_(True),
+                )
+            )
+        ).scalar_one()
+    )
+
+
 def chat_join_url(chat: TrackedChat) -> str | None:
     """Chatga qo'shilish uchun ommaviy havola (`invite_url` yoki `t.me/username`)."""
     if chat.invite_url:
@@ -141,7 +263,37 @@ def join_buttons(chats: list[TrackedChat]) -> list[list[InlineKeyboardButton]]:
     return rows
 
 
-def announcement_keyboard(chats: list[TrackedChat]) -> InlineKeyboardMarkup:
+def _share_promo_text(announcement_text: str | None) -> str:
+    """Ulashish uchun qisqa promo matn (share URL'ga sig'ishi uchun cheklangan)."""
+    base = (announcement_text or "🎉 Konkursda ishtirok eting!").strip()
+    if len(base) > 500:
+        base = base[:500].rstrip() + "…"
+    return base + "\n\n🎁 Konkursda ishtirok eting va sovg'alarni yutib oling! 👇"
+
+
+def share_button(
+    inviter_tg_id: int, announcement_text: str | None
+) -> InlineKeyboardButton:
+    """`t.me/share/url` tugmasi — inline mode TALAB QILMAYDI.
+
+    Bosilganda native "ulashish" oynasi ochiladi va tanlangan chatga promo matn
+    + shaxsiy deep-link yuboriladi. (`switch_inline_query` esa BotFather'da inline
+    mode yoqilishini talab qiladi — shuning uchun undan voz kechildi.)
+    """
+    deeplink = referral_deeplink(inviter_tg_id)
+    text = _share_promo_text(announcement_text)
+    url = (
+        "https://t.me/share/url?url="
+        + quote(deeplink, safe="")
+        + "&text="
+        + quote(text, safe="")
+    )
+    return InlineKeyboardButton(text="📤 Do'stlarga ulashish", url=url)
+
+
+def announcement_keyboard(
+    inviter_tg_id: int, announcement_text: str | None
+) -> InlineKeyboardMarkup:
     """E'lon uchun inline keyboard: "Qatnashaman" + "Do'stlarga ulashish".
 
     Chat qo'shilish tugmalari bu yerda ko'rsatilmaydi — foydalanuvchi
@@ -151,9 +303,6 @@ def announcement_keyboard(chats: list[TrackedChat]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🎁 Qatnashaman", callback_data=SUBSCRIBED_CB)],
-            [InlineKeyboardButton(
-                text="📤 Do'stlarga ulashish",
-                switch_inline_query="",
-            )],
+            [share_button(inviter_tg_id, announcement_text)],
         ]
     )

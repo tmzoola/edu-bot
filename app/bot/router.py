@@ -27,7 +27,7 @@ from models.telegram_user import TelegramUser
 from services.referral.events import (
     announcement_keyboard,
     get_active_event,
-    get_active_tracked_chats,
+    record_referral,
 )
 
 _TZ = ZoneInfo("Asia/Tashkent")
@@ -165,9 +165,8 @@ async def _maybe_show_event(msg: Message) -> bool:
         event = await get_active_event(session, now)
         if event is None:
             return False
-        chats = await get_active_tracked_chats(session)
 
-    kb = announcement_keyboard(chats)
+    kb = announcement_keyboard(msg.from_user.id, event.announcement_text)
     photo = _resolve_event_photo(event.image_url)
     if photo is not None:
         try:
@@ -195,20 +194,22 @@ async def start_handler(msg: Message, state: FSMContext, command: CommandObject)
     await state.clear()
     user = await get_or_create_user(msg.from_user)
 
-    # /start ref_<inviter_tg_id> — inline "Qatnashaman" tugmasi orqali kelgan.
-    # Hozircha inviter ma'lumotini log qilamiz; asosiy referral hisob-kitob
-    # invite link'lar orqali TrackedChat'ga qo'shilganda yuritiladi.
+    # /start ref_<inviter_tg_id> — deep-link orqali kelgan taklif.
+    # Faol event bo'lsa kutilayotgan referral yoziladi; taklif qilingan
+    # foydalanuvchi obuna gate'dan o'tgach chipta sifatida hisoblanadi.
     args = (command.args or "").strip()
-    if args.startswith("ref_"):
-        try:
-            inviter_tg_id = int(args[4:])
-            logger.info(
-                "start deep-link: user=%s inviter=%s",
-                msg.from_user.id,
-                inviter_tg_id,
-            )
-        except ValueError:
-            pass
+    if args.startswith("ref_") and args[4:].isdigit():
+        inviter_tg_id = int(args[4:])
+        now = datetime.now(_TZ)
+        async with session_factory() as session:
+            event = await get_active_event(session, now)
+            if event is not None:
+                await record_referral(
+                    session,
+                    event_id=event.id,
+                    inviter_tg_id=inviter_tg_id,
+                    invited_tg_id=msg.from_user.id,
+                )
 
     if not user.is_registered:
         await msg.answer(

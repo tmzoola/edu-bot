@@ -15,6 +15,7 @@ from models.contest import Contest, ContestAttempt, ContestQuestion  # noqa: F40
 from models.guard import FlaggedUser, JoinEvent  # noqa: F401
 from models.referral import InviteJoin, InviteLink, TrackedChat  # noqa: F401
 from models.referral_event import (  # noqa: F401
+    EventReferral,
     ReferralEvent,
     ReferralEventParticipant,
 )

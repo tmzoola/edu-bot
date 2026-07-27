@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     TIMESTAMP,
+    BigInteger,
     Boolean,
     ForeignKey,
     Integer,
@@ -57,6 +58,60 @@ class ReferralEvent(Base):
 
     def __str__(self) -> str:
         return self.title or f"ReferralEvent({self.id})"
+
+
+class EventReferral(Base):
+    """Bot deep-link (`?start=ref_<id>`) orqali taklif qilingan foydalanuvchi.
+
+    `/start ref_<inviter>` bosilganda `counted=False` bilan yoziladi; taklif
+    qilingan foydalanuvchi obuna gate'dan (Obuna bo'ldim) o'tgach `counted=True`
+    bo'ladi va bu taklif qiluvchiga chipta sifatida hisoblanadi. Har bir taklif
+    qilingan foydalanuvchi bitta eventda faqat bir marta hisoblanadi.
+    """
+
+    __tablename__ = "event_referrals"
+    __table_args__ = (
+        UniqueConstraint(
+            "event_id", "invited_tg_id", name="uq_event_referrals_event_invited"
+        ),
+    )
+
+    event_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("referral_events.id", ondelete="CASCADE"),
+        index=True,
+    )
+    # Taklif qiluvchi (bizning users jadvalimizdagi PK).
+    inviter_user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("telegram_users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    # Taklif qilingan foydalanuvchining Telegram ID'si.
+    invited_tg_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    # Taklif qilingan foydalanuvchi ro'yxatdan o'tgach — uning PK'si (NULL ham bo'ladi).
+    invited_user_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("telegram_users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    # Obuna gate'dan o'tib, chipta sifatida hisoblanganmi.
+    counted: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+
+    event: Mapped["ReferralEvent"] = relationship(
+        "ReferralEvent", lazy="select"
+    )
+    inviter: Mapped["TelegramUser"] = relationship(
+        "TelegramUser", foreign_keys=[inviter_user_id], lazy="select"
+    )
+    invited: Mapped["TelegramUser | None"] = relationship(
+        "TelegramUser", foreign_keys=[invited_user_id], lazy="select"
+    )
+
+    def __str__(self) -> str:
+        return f"EventReferral(event={self.event_id}, invited={self.invited_tg_id})"
 
 
 class ReferralEventParticipant(Base):
