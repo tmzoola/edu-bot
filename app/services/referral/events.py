@@ -13,6 +13,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from urllib.parse import quote
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy import String, cast, func, or_, select
@@ -360,27 +361,26 @@ def _share_promo_text(announcement_text: str | None) -> str:
     return base + "\n\n🎁 Konkursda ishtirok eting va sovg'alarni yutib oling! 🏆"
 
 
-def share_message_text(share_text: str | None, inviter_tg_id: int) -> str:
-    """Ulashiladigan to'liq matn: promo (ixcham) + deep-link PASTDA."""
-    return _share_promo_text(share_text) + "\n\n" + referral_deeplink(inviter_tg_id)
-
-
 def share_button(
     inviter_tg_id: int, share_text: str | None
 ) -> InlineKeyboardButton:
-    """"📤 Do'stlarga ulashish" — inline mode orqali.
+    """`t.me/share/url` tugmasi — inline mode TALAB QILMAYDI (har doim ishlaydi).
 
-    Bosilganda inline rejim ochiladi va do'stga to'liq promo matn (havola PASTDA)
-    + "🎁 Qatnashaman" tugmali xabar yuboriladi (`bot/handlers/referral_inline.py`).
-    Buning uchun BotFather'da bot uchun inline mode YOQILGAN bo'lishi shart.
-
-    Eslatma: `switch_inline_query`da matn uzatib bo'lmaydi (faqat qidiruv so'zi),
-    shuning uchun asl matn inline handler tomonidan qayta quriladi — `share_text`
-    bu yerda ishlatilmaydi, lekin imzoni bir xil saqlash uchun qoldirilgan.
+    Bosilganda native "ulashish" oynasi ochiladi va tanlangan chatga deep-link
+    (`url`) + promo matn (`text`) yuboriladi. `url` bo'sh bo'lmasligi shart —
+    aks holda ulashish oynasi hech narsa yubormaydi. Telegram `url`ni matndan
+    oldin (tepada) ko'rsatadi — bu share/url'ning o'zgartirib bo'lmaydigan
+    xususiyati.
     """
-    return InlineKeyboardButton(
-        text="📤 Do'stlarga ulashish", switch_inline_query=""
+    deeplink = referral_deeplink(inviter_tg_id)
+    text = _share_promo_text(share_text)
+    url = (
+        "https://t.me/share/url?url="
+        + quote(deeplink, safe="")
+        + "&text="
+        + quote(text, safe="")
     )
+    return InlineKeyboardButton(text="📤 Do'stlarga ulashish", url=url)
 
 
 def announcement_keyboard(
