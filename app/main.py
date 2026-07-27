@@ -1,9 +1,6 @@
-import asyncio
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 import uvicorn
 from admin import setup_admin
@@ -32,76 +29,28 @@ from starlette.responses import JSONResponse
 logger = logging.getLogger(__name__)
 
 
-_TZ = ZoneInfo("Asia/Tashkent")
-_REENGAGEMENT_HOUR = 10  # 10:00 Tashkent time
-
-
-async def _reengagement_loop() -> None:
-    """Fire daily re-engagement notifications at 10:00 Tashkent time."""
-    from services.notifications import send_reengagement_notifications
-
-    while True:
-        now = datetime.now(_TZ)
-        # Seconds until next 10:00
-        next_run = now.replace(hour=_REENGAGEMENT_HOUR, minute=0, second=0, microsecond=0)
-        if now >= next_run:
-            # Already past 10:00 today — schedule for tomorrow
-            next_run = next_run.replace(day=next_run.day + 1)
-        wait = (next_run - now).total_seconds()
-        logger.info("Reengagement: next run in %.0f s (%s)", wait, next_run.isoformat())
-        await asyncio.sleep(wait)
-        try:
-            stats = await send_reengagement_notifications(settings.WEBAPP_URL)
-            logger.info("Reengagement done: %s", stats)
-        except Exception:
-            logger.exception("Reengagement notification error")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
     setup_admin(app)
 
-    # Start Telegram bot polling
-    from aiogram.types import BotCommand, BotCommandScopeDefault
-    from bot.setup import ALLOWED_UPDATES, bot, dp
-
-    try:
-        await bot.set_my_commands(
-            [BotCommand(command="start", description="Botni ishga tushirish")],
-            scope=BotCommandScopeDefault(),
-        )
-    except Exception:
-        logger.exception("set_my_commands failed")
-
-    polling_task = asyncio.create_task(
-        dp.start_polling(bot, skip_updates=True, allowed_updates=ALLOWED_UPDATES)
-    )
-    logger.info("✅ Bot polling started")
-
-    reengagement_task = asyncio.create_task(_reengagement_loop())
-    logger.info("✅ Reengagement scheduler started")
-
-    # T-022 · Referral anti-fraud grace period worker.
-    from services.referral.pending_joins_worker import pending_joins_loop
-
-    pending_joins_task = asyncio.create_task(pending_joins_loop())
-    logger.info("✅ Pending joins worker started")
+    # NB: Bot polling + reengagement + pending_joins loop'lari endi alohida
+    # `bot` konteynerida (`app/bot_main.py`) ishlaydi. WebApp uvicorn ko'p
+    # worker bilan ishlaganda `TelegramConflictError` yuz bermasligi va
+    # background task'lar N marta takrorlanmasligi uchun.
+    # `bot` obyektining o'zi bu process'da import qilinadi va send_message /
+    # get_chat_member kabi chaqiruvlar uchun ishlatiladi.
+    logger.info("✅ WebApp lifespan boshlandi (bot polling alohida konteynerda)")
 
     yield
 
-    # Graceful shutdown
-    logger.info("🔴 Shutting down...")
-    pending_joins_task.cancel()
-    reengagement_task.cancel()
-    polling_task.cancel()
-    for task in (polling_task, reengagement_task, pending_joins_task):
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
-    await bot.session.close()
-    logger.info("Bot stopped.")
+    logger.info("🔴 WebApp lifespan yakunlandi")
+    from bot.setup import bot
+
+    try:
+        await bot.session.close()
+    except Exception:
+        logger.exception("bot.session.close xatosi")
 
 
 app = FastAPI(
@@ -206,13 +155,58 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/health")
 async def health_check():
+    """Butun stack diagnostikasi bitta joyda.
+    UptimeRobot va admin uchun — DB, Redis, pool holati.
+    """
+    import time as _t
+    from db.session import engine as _engine
+
+    result: dict = {"status": "ok"}
+    overall_ok = True
+
+    # DB latency + ping
+    t0 = _t.perf_counter()
     try:
         async with session_factory() as session:
             await session.execute(text("SELECT 1"))
+        db_latency_ms = int((_t.perf_counter() - t0) * 1000)
+        result["db"] = {"ok": True, "latency_ms": db_latency_ms}
     except Exception as e:
-        logger.error(f"DB error: {e}")
-        return JSONResponse(status_code=503, content={"status": "db-unreachable"})
-    return {"status": "ok"}
+        logger.error("Health: DB error: %s", e)
+        result["db"] = {"ok": False, "error": str(e)[:120]}
+        overall_ok = False
+
+    # SQLAlchemy pool holati (real vaqtda qancha ulanish band)
+    try:
+        pool = _engine.pool
+        result["pool"] = {
+            "size": pool.size(),
+            "checked_out": pool.checkedout(),
+            "overflow": pool.overflow(),
+        }
+    except Exception:
+        pass
+
+    # Redis ping
+    try:
+        from api.v1.webapp import _redis  # local import — circular xavfsizligi uchun
+
+        if _redis is not None:
+            t1 = _t.perf_counter()
+            pong = await _redis.ping()
+            redis_latency_ms = int((_t.perf_counter() - t1) * 1000)
+            result["redis"] = {"ok": bool(pong), "latency_ms": redis_latency_ms}
+        else:
+            result["redis"] = {"ok": False, "error": "client not initialized"}
+    except Exception as e:
+        logger.warning("Health: Redis error: %s", e)
+        result["redis"] = {"ok": False, "error": str(e)[:120]}
+        # Redis muhim, lekin butun stack'ni yiqitmaymiz — WebApp Redis'siz ham
+        # ishlaydi (in-memory fallback yo'q, lekin subscription kesh o'chadi).
+
+    if not overall_ok:
+        return JSONResponse(status_code=503, content=result)
+    return result
 
 
 if __name__ == "__main__":
