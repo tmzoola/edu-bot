@@ -10,6 +10,7 @@ Handler tanasi yupqa qolishi uchun barcha DB va keyboard logikasi shu yerda.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import quote
@@ -345,8 +346,13 @@ def join_buttons(chats: list[TrackedChat]) -> list[list[InlineKeyboardButton]]:
 
 
 def _share_promo_text(announcement_text: str | None) -> str:
-    """Ulashish uchun qisqa promo matn (share URL'ga sig'ishi uchun cheklangan)."""
+    """Ulashish uchun qisqa promo matn (share URL'ga sig'ishi uchun cheklangan).
+
+    E'lon matnidagi ketma-ket bo'sh qatorlar (`\\n\\n...`) bitta qatorga
+    qisqartiriladi — ulashilgan xabarda katta bo'sh joylar bo'lmasin.
+    """
     base = (announcement_text or "🎉 Konkursda ishtirok eting!").strip()
+    base = re.sub(r"(?:[ \t]*\n){2,}[ \t]*", "\n", base)
     if len(base) > 500:
         base = base[:500].rstrip() + "…"
     return base + "\n\n🎁 Konkursda ishtirok eting va sovg'alarni yutib oling! 🏆"
