@@ -27,17 +27,9 @@ from aiogram.types import (
     InputTextMessageContent,
 )
 
-from sqlalchemy import select
-
 from core.config import settings
 from db.session import session_factory
-from models.telegram_user import TelegramUser
-from services.referral.events import (
-    get_active_event,
-    get_active_tracked_chats,
-    referral_deeplink,
-)
-from services.referral.invite_links import get_or_create_invite_link
+from services.referral.events import get_active_event, share_message_text
 
 logger = logging.getLogger(__name__)
 
@@ -70,71 +62,29 @@ def _resolve_photo_url(image_url: str | None) -> str | None:
     return f"{base}/media/{image_url.lstrip('/')}"
 
 
-async def _build_caption(session, bot, event, inviter_tg_id: int) -> str:
-    """E'lon matni + inviter shaxsiy deep-link havolasi + CTA (har doim to'la)."""
-    base = (event.announcement_text or "🎉 Konkursda ishtirok eting!").strip()
-    deeplink = referral_deeplink(inviter_tg_id)
-
-    parts = [
-        base,
-        "",
-        "🔗 <b>Shaxsiy taklif havolangiz:</b>",
-        deeplink,
-    ]
-
-    # Ixtiyoriy: faol tracked kanal/guruh bo'lsa, shaxsiy invite linklarni ham
-    # qo'shamiz (bo'lmasa ham xabar deep-link bilan to'la bo'ladi).
-    user = (
-        await session.execute(
-            select(TelegramUser).where(TelegramUser.telegram_id == inviter_tg_id)
-        )
-    ).scalar_one_or_none()
-    if user is not None:
-        chan_lines: list[str] = []
-        for chat in await get_active_tracked_chats(session):
-            try:
-                link = await get_or_create_invite_link(
-                    session, bot, user_id=user.id, tracked_chat_id=chat.id
-                )
-            except Exception:  # noqa: BLE001
-                logger.exception(
-                    "inline: invite link olib bo'lmadi chat=%s user=%s",
-                    chat.id, user.id,
-                )
-                continue
-            icon = "📢" if chat.type == "channel" else "👥"
-            chan_lines.append(f"{icon} <b>{chat.title}</b>:\n{link.invite_link}")
-        if chan_lines:
-            parts.append("")
-            parts.append("📌 Kanal/guruhlar:")
-            parts.extend(chan_lines)
-
-    parts += [
-        "",
-        "🎁 Konkursda ishtirok eting va qimmatbaho sovg'alarni yutib oling! 🏆",
-        "👇 Havola orqali botga kiring va shartlarni bajaring.",
-    ]
-    return "\n".join(parts)
+def _build_caption(event, inviter_tg_id: int) -> str:
+    """Ulashiladigan matn: ixcham promo (Ulashish matni) + deep-link PASTDA."""
+    return share_message_text(
+        event.share_text or event.announcement_text, inviter_tg_id
+    )
 
 
 @router.inline_query()
 async def on_inline_query(query: InlineQuery) -> None:
-    from bot.setup import bot as _bot
-
     inviter = query.from_user
     now = datetime.now(_TZ)
 
     async with session_factory() as session:
         event = await get_active_event(session, now)
-        if event is None:
-            await query.answer(results=[], cache_time=5, is_personal=True)
-            return
-        try:
-            text = await _build_caption(session, _bot, event, inviter.id)
-            await session.commit()
-        except Exception:  # noqa: BLE001
-            logger.exception("inline caption qurishda xato: inviter=%s", inviter.id)
-            text = event.announcement_text or "🎉 Konkursda ishtirok eting!"
+    if event is None:
+        await query.answer(results=[], cache_time=5, is_personal=True)
+        return
+
+    try:
+        text = _build_caption(event, inviter.id)
+    except Exception:  # noqa: BLE001
+        logger.exception("inline caption qurishda xato: inviter=%s", inviter.id)
+        text = event.announcement_text or "🎉 Konkursda ishtirok eting!"
 
     kb = _share_keyboard(inviter.id)
     photo_url = _resolve_photo_url(event.image_url)
