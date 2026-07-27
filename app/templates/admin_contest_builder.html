@@ -356,9 +356,7 @@ function render(){
                             <i class="fa fa-image"></i> Rasm yuklash
                             <input type="file" accept="image/*" style="display:none" onchange="uploadImage(${i}, this)">
                         </label>
-                        <button type="button" class="q-img-btn" style="margin-left:6px" onclick="pasteImage(${i})" title="Clipboard'dan yopishtirish (Ctrl+V)">
-                            <i class="fa fa-paste"></i> Yopishtirish
-                        </button>
+                        <span style="margin-left:10px;color:#9aa2b8;font-size:.78rem"><i class="fa fa-paste"></i> yoki Ctrl+V bosing</span>
                     `}
                 </div>
                 <textarea class="textarea auto-grow" placeholder="Savol matni (rasm bo'lsa ixtiyoriy)" style="overflow:hidden;resize:none" data-i="${i}" data-k="text">${escapeHtml(q.text)}</textarea>
@@ -400,6 +398,26 @@ function updateCount(){
     else { st.className = 'need'; st.textContent = ` — yana ${need - questions.length} ta kerak`; }
 }
 document.getElementById('f-count').addEventListener('input', updateCount);
+
+document.addEventListener('paste', (event) => {
+    const items = event.clipboardData && event.clipboardData.items;
+    if (!items) return;
+    let file = null;
+    for (const it of items) {
+        if (it.kind === 'file' && it.type.startsWith('image/')) { file = it.getAsFile(); break; }
+    }
+    if (!file) return;
+    let idx = -1;
+    const active = document.activeElement;
+    if (active) {
+        const els = Array.from(document.querySelectorAll('#q-list .q-item'));
+        idx = els.findIndex(el => el.contains(active));
+    }
+    if (idx === -1) idx = questions.length - 1;
+    if (idx < 0) return;
+    event.preventDefault();
+    uploadImageFile(idx, file);
+});
 
 function escapeHtml(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function escapeAttr(s){return escapeHtml(s).replace(/"/g,'&quot;')}
