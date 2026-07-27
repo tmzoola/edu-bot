@@ -127,6 +127,8 @@ def setup_admin(app: FastAPI) -> None:
         label="Referral",
         icon="fa fa-user-plus",
         views=[
+            Link(label="Konkurs g'oliblari", icon="fa fa-trophy",
+                 url="/admin-tools/event-leaderboard"),
             Link(label="Top inviterlar", icon="fa fa-medal",
                  url="/admin-tools/referral-leaderboard"),
             ReferralEventAdminView(ReferralEvent, identity="referral-event"),

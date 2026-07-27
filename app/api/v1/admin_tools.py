@@ -1486,6 +1486,85 @@ async def referral_leaderboard_page(
     )
 
 
+@router.get("/event-leaderboard", response_class=HTMLResponse)
+async def event_leaderboard_page(
+    request: Request,
+    event_id: int | None = None,
+    q: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin panel: konkursda eng ko'p chipta yiggan ishtirokchilar reytingi."""
+    from services.referral.events import get_event_leaderboard, list_events
+
+    events = await list_events(db)
+    if event_id is None and events:
+        event_id = events[0].id  # eng yangi konkurs
+
+    rows = []
+    if event_id is not None:
+        rows = await get_event_leaderboard(db, event_id=event_id, search=q)
+
+    return templates.TemplateResponse(
+        "admin_event_leaderboard.html",
+        {
+            "request": request,
+            "rows": rows,
+            "events": [{"id": e.id, "title": e.title} for e in events],
+            "selected_event_id": event_id,
+            "search": q or "",
+        },
+    )
+
+
+@router.get("/event-leaderboard/export")
+async def event_leaderboard_export(
+    event_id: int | None = None,
+    q: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Konkurs g'oliblar reytingini .xlsx sifatida yuklab olish."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    from services.referral.events import get_event_leaderboard, list_events
+
+    events = await list_events(db)
+    if event_id is None and events:
+        event_id = events[0].id
+    rows = []
+    if event_id is not None:
+        rows = await get_event_leaderboard(db, event_id=event_id, limit=100000, search=q)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "G'oliblar"
+    headers = ["O'rin", "Ism Familya", "Username", "Telegram ID", "Chiptalar"]
+    ws.append(headers)
+    header_fill = PatternFill(start_color="6C63F6", end_color="6C63F6", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for r in rows:
+        ws.append([r.rank, r.full_name, r.username or "", r.telegram_id, r.tickets])
+
+    for col, w in enumerate([6, 28, 20, 16, 12], start=1):
+        ws.column_dimensions[chr(64 + col)].width = w
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    suffix = f"_event{event_id}" if event_id else ""
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="konkurs_goliblar{suffix}.xlsx"'},
+    )
+
+
 @router.get("/referral-leaderboard/export")
 async def referral_leaderboard_export(
     tracked_chat_id: int | None = None,

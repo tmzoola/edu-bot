@@ -10,11 +10,12 @@ Handler tanasi yupqa qolishi uchun barcha DB va keyboard logikasi shu yerda.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import quote
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from sqlalchemy import func, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -219,6 +220,86 @@ async def count_referral_on_gate(
     await session.commit()
 
 
+@dataclass(slots=True)
+class EventInviterRow:
+    """Konkurs g'oliblar reytingi satri."""
+
+    rank: int
+    user_id: int
+    telegram_id: int
+    first_name: str | None
+    last_name: str | None
+    username: str | None
+    tickets: int
+
+    @property
+    def full_name(self) -> str:
+        parts = [p for p in (self.first_name, self.last_name) if p]
+        return " ".join(parts) or (self.username or str(self.telegram_id))
+
+
+async def list_events(session: AsyncSession) -> list[ReferralEvent]:
+    """Barcha konkurslar (eng yangisi birinchi) — reyting selektori uchun."""
+    result = await session.execute(
+        select(ReferralEvent).order_by(ReferralEvent.starts_at.desc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_event_leaderboard(
+    session: AsyncSession,
+    *,
+    event_id: int,
+    limit: int = 500,
+    offset: int = 0,
+    search: str | None = None,
+) -> list[EventInviterRow]:
+    """Konkursda eng ko'p chipta yiggan (hisoblangan referral) ishtirokchilar."""
+    tickets = func.count(EventReferral.id).label("tickets")
+    stmt = (
+        select(
+            TelegramUser.id.label("user_id"),
+            TelegramUser.telegram_id,
+            TelegramUser.first_name,
+            TelegramUser.last_name,
+            TelegramUser.username,
+            tickets,
+        )
+        .join(EventReferral, EventReferral.inviter_user_id == TelegramUser.id)
+        .where(
+            EventReferral.event_id == event_id,
+            EventReferral.counted.is_(True),
+        )
+        .group_by(TelegramUser.id)
+        .order_by(tickets.desc(), TelegramUser.id.asc())
+    )
+    if search:
+        needle = f"%{search.strip()}%"
+        stmt = stmt.where(
+            or_(
+                TelegramUser.first_name.ilike(needle),
+                TelegramUser.last_name.ilike(needle),
+                TelegramUser.username.ilike(needle),
+                cast(TelegramUser.telegram_id, String).ilike(needle),
+            )
+        )
+    stmt = stmt.limit(limit).offset(offset)
+
+    rows = (await session.execute(stmt)).all()
+    return [
+        EventInviterRow(
+            rank=i,
+            user_id=r.user_id,
+            telegram_id=r.telegram_id,
+            first_name=r.first_name,
+            last_name=r.last_name,
+            username=r.username,
+            tickets=int(r.tickets or 0),
+        )
+        for i, r in enumerate(rows, start=offset + 1)
+    ]
+
+
 async def referral_ticket_count(
     session: AsyncSession, *, event_id: int, inviter_user_id: int
 ) -> int:
@@ -277,17 +358,13 @@ def share_button(
     """`t.me/share/url` tugmasi — inline mode TALAB QILMAYDI.
 
     Bosilganda native "ulashish" oynasi ochiladi va tanlangan chatga promo matn
-    + shaxsiy deep-link yuboriladi. (`switch_inline_query` esa BotFather'da inline
-    mode yoqilishini talab qiladi — shuning uchun undan voz kechildi.)
+    yuboriladi. Deep-link `url` paramda EMAS, balki matnning OXIRIGA qo'yiladi —
+    aks holda Telegram uni xabarning tepasida ko'rsatadi (`url` matndan oldin
+    chiqadi). Shu tufayli havola promo matndan keyin, pastda ko'rinadi.
     """
     deeplink = referral_deeplink(inviter_tg_id)
-    text = _share_promo_text(announcement_text)
-    url = (
-        "https://t.me/share/url?url="
-        + quote(deeplink, safe="")
-        + "&text="
-        + quote(text, safe="")
-    )
+    text = _share_promo_text(announcement_text) + "\n\n" + deeplink
+    url = "https://t.me/share/url?url=&text=" + quote(text, safe="")
     return InlineKeyboardButton(text="📤 Do'stlarga ulashish", url=url)
 
 

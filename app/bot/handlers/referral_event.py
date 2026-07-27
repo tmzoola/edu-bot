@@ -31,13 +31,11 @@ from services.referral.events import (
     chat_join_url,
     count_referral_on_gate,
     get_active_event,
-    get_active_tracked_chats,
     get_or_create_participant,
     referral_deeplink,
     referral_ticket_count,
     share_button,
 )
-from services.referral.invite_links import get_or_create_invite_link
 from services.referral.membership import check_subscription
 
 logger = logging.getLogger(__name__)
@@ -126,21 +124,6 @@ async def on_subscribed(cb: CallbackQuery, bot: Bot) -> None:
                 invited_user_id=user.id,
             )
 
-            # Ixtiyoriy: faol tracked kanal/guruh bo'lsa, shaxsiy invite linklar.
-            chats = await get_active_tracked_chats(session)
-            links: list[tuple[TrackedChat, str]] = []
-            for chat in chats:
-                try:
-                    invite = await get_or_create_invite_link(
-                        session, bot, user_id=user.id, tracked_chat_id=chat.id
-                    )
-                    links.append((chat, invite.invite_link))
-                except Exception:  # noqa: BLE001
-                    logger.exception(
-                        "referral_event: invite link olib bo'lmadi chat=%s user=%s",
-                        chat.id, user.id,
-                    )
-
             tickets = await referral_ticket_count(
                 session, event_id=event.id, inviter_user_id=user.id
             )
@@ -160,7 +143,7 @@ async def on_subscribed(cb: CallbackQuery, bot: Bot) -> None:
 
     deeplink = referral_deeplink(cb.from_user.id)
     await cb.message.answer(
-        _ticket_text(event, number=number, tickets=tickets, links=links, deeplink=deeplink),
+        _ticket_text(event, number=number, tickets=tickets, deeplink=deeplink),
         reply_markup=_ticket_keyboard(cb.from_user.id, event.announcement_text),
         disable_web_page_preview=True,
     )
@@ -171,32 +154,22 @@ def _ticket_text(
     *,
     number: int,
     tickets: int,
-    links: list[tuple[TrackedChat, str]],
     deeplink: str,
 ) -> str:
     header = event.success_text or (
         "🎉 <b>Tabriklaymiz! Siz konkursda ishtirok etyapsiz!</b>"
     )
-    lines = [
+    return "\n".join([
         header,
         "",
         f"👤 Ishtirokchi <b>№{number}</b> · Chiptalaringiz: <b>{tickets}</b>",
         "",
         "🔗 <b>Sizning shaxsiy taklif havolangiz:</b>",
         deeplink,
-    ]
-    if links:
-        lines.append("")
-        lines.append("📌 Kanal/guruh havolalari:")
-        for chat, url in links:
-            icon = "📢" if chat.type == "channel" else "👥"
-            lines.append(f"{icon} {chat.title}:\n<code>{url}</code>")
-    lines += [
         "",
         "👥 Do'stingiz shu havola orqali botga kirib obuna bo'lsa — sizga <b>+1 chipta</b>! 🎫",
         "🏆 Eng ko'p taklif qilgan ishtirokchilar g'olib bo'ladi!",
-    ]
-    return "\n".join(lines)
+    ])
 
 
 def _ticket_keyboard(
