@@ -226,3 +226,108 @@ docker compose rm -f dozzle loki promtail grafana
 ## Aloqa
 
 Savol bo'lsa: `docs/TASKS.md` ga T-xxx sifatida qo'shing yoki chatda ayting.
+
+---
+
+## 9. Haqiqiy deploy holati (2026-07-27, ob-malaka.timv.uz serveri)
+
+Deploy bajarildi. Quyida yuqoridagi ko'rsatmalardan **farq qilgan** joylar —
+keyingi safar shu bo'limga tayaning, 3-bo'limdagi nginx snippet'i bu serverda
+to'g'ridan-to'g'ri ishlamaydi.
+
+### 9.1. Portlar: `expose` yetarli emas edi
+
+1-bo'limda "barcha yangi portlar `expose` orqali" deyilgan, lekin nginx host'da
+(konteynerda emas) ishlaydi — `expose` host'ning `127.0.0.1` iga port ochmaydi,
+shuning uchun `proxy_pass http://127.0.0.1:8080` hech qayerga bormasdi.
+
+Yechim — `docker-compose.yml` da loopback binding qo'shildi (tashqariga baribir
+ochilmaydi, faqat host ichidan):
+
+```yaml
+dozzle:
+  ports:
+    - "127.0.0.1:8080:8080"
+grafana:
+  ports:
+    - "127.0.0.1:3001:3000"
+```
+
+> **Grafana 3000 EMAS, 3001.** Host'ning 3000-porti PM2 ostidagi boshqa ilova
+> tomonidan band. 3-bo'limdagidek `127.0.0.1:3000` ga proxy qilinsa, Grafana
+> o'rniga o'sha begona ilova ochiladi.
+
+### 9.2. Grafana `proxy_pass` da oxirgi slash BO'LMASLIGI kerak
+
+Compose'da `GF_SERVER_SERVE_FROM_SUB_PATH: "true"` turibdi — ya'ni Grafana
+`/grafana` prefiksini o'zi kutadi. 3-bo'limdagi `proxy_pass http://...:3000/;`
+(slash bilan) prefiksni kesib tashlaydi, natijada Grafana `/grafana/` ga qayta
+yo'naltiradi va **redirect loop** hosil bo'ladi.
+
+To'g'risi — slashsiz:
+
+```nginx
+location /grafana/ {
+    proxy_pass http://127.0.0.1:3001;   # oxirida / YO'Q
+    ...
+}
+```
+
+### 9.3. `Connection "upgrade"` o'rniga map
+
+Har bir so'rovda qat'iy `Connection: upgrade` yuborish websocket bo'lmagan
+so'rovlarni buzishi mumkin. `/etc/nginx/conf.d/websocket_upgrade.conf` da umumiy
+map yaratildi va ikkala blokda `proxy_set_header Connection $connection_upgrade;`
+ishlatiladi.
+
+### 9.4. `/logs` va `/grafana` (slashsiz) uchun redirect
+
+`location /logs/` slashsiz `/logs` so'rovini ushlamaydi — u `location /` ga
+tushib app'dan 404 olardi. Qo'shildi:
+
+```nginx
+location = /logs    { return 301 /logs/; }
+location = /grafana { return 301 /grafana/; }
+```
+
+### 9.5. Dozzle healthcheck tuzatildi
+
+Compose'dagi `wget`-ga asoslangan healthcheck ishlamasdi (Dozzle image'i
+distroless, ichida `wget` yo'q) — konteyner doim `unhealthy` turardi.
+Endi Dozzle'ning o'z buyrug'i:
+
+```yaml
+healthcheck:
+  test: ["CMD", "/dozzle", "healthcheck"]
+```
+
+### 9.6. Parollar — `admin123` EMAS
+
+Ochiq domendagi Grafana uchun `admin123` xavfli, shuning uchun kuchli parollar
+qo'yildi (`.env` va `/etc/nginx/.htpasswd_logs` da). Parollarni serverdan
+qarang, bu faylga yozmang:
+
+```bash
+grep GRAFANA_ADMIN /opt/bot/edu-bot/.env
+```
+
+> Diqqat: `GF_SECURITY_ADMIN_PASSWORD` faqat Grafana bazasi **birinchi marta**
+> yaratilganda qo'llanadi. Volume mavjud bo'lsa `.env` ni o'zgartirish yetarli
+> emas — parolni shunday almashtiring:
+> ```bash
+> docker exec malaka_grafana grafana cli --homepath /usr/share/grafana \
+>     admin reset-admin-password '<yangi-parol>'
+> ```
+
+### 9.7. Bu serverda `docker compose` emas, `docker-compose`
+
+O'rnatilgan versiya Compose v1.29.0 (Docker 20.10.12). Yuqoridagi barcha
+`docker compose ...` buyruqlarini `docker-compose ...` deb yozing.
+
+### 9.8. Hali bajarilmagan (qo'lda talab qiladi)
+
+- **5-bo'lim: dashboard import** (ID `13639` / `15140`) — Grafana'dan
+  grafana.com ga chiqish kerak, brauzerdan qilinadi.
+- **5-bo'lim: Telegram alerting** — bot token va chat_id kerak, ular yo'q edi.
+- **Disk**: `/` 81% to'lgan (13 GB bo'sh). Loki retention 30 kun — agar disk
+  siqilsa `observability/loki-config.yaml` da `retention_period: 168h` qiling.

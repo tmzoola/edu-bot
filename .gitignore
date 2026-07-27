@@ -195,3 +195,8 @@ test-pdf
 # Uploaded media (books etc.)
 app/media/
 exported_tests
+
+# Deploy paytida olingan zaxira nusxalar.
+# .env.bak-* ichida BOT_TOKEN va parollar bor — repoga hech qachon tushmasin.
+*.bak-*
+.env.bak*
