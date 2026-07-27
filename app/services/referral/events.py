@@ -352,7 +352,10 @@ def _share_promo_text(announcement_text: str | None) -> str:
     qisqartiriladi — ulashilgan xabarda katta bo'sh joylar bo'lmasin.
     """
     base = (announcement_text or "🎉 Konkursda ishtirok eting!").strip()
-    base = re.sub(r"(?:[ \t]*\n){2,}[ \t]*", "\n", base)
+    # CRLF / CR ni LF ga keltiramiz, nbsp'ni oddiy probelga — aks holda `\r`
+    # ketma-ket bo'sh qatorlarni "bo'lib" collapse'ga xalal beradi.
+    base = base.replace("\r\n", "\n").replace("\r", "\n").replace(" ", " ")
+    base = re.sub(r"[ \t]*\n[ \t]*(?:\n[ \t]*)+", "\n", base)
     if len(base) > 500:
         base = base[:500].rstrip() + "…"
     return base + "\n\n🎁 Konkursda ishtirok eting va sovg'alarni yutib oling! 🏆"
