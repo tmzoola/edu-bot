@@ -35,8 +35,11 @@ class ReferralEvent(Base):
     __tablename__ = "referral_events"
 
     title: Mapped[str] = mapped_column(String(255))
-    # E'lon matni (Telegram caption / message body).
+    # E'lon matni (Telegram caption / message body — /start'da ko'rsatiladi).
     announcement_text: Mapped[str] = mapped_column(Text)
+    # "Do'stlarga ulashish"da yuboriladigan matn. Bo'sh bo'lsa `announcement_text`
+    # ishlatiladi.
+    share_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     # E'lon rasmi — URL yoki Telegram file_id (RewardTier.image_url uslubida).
     # NULL bo'lsa e'lon faqat matn sifatida yuboriladi.
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -144,7 +144,9 @@ async def on_subscribed(cb: CallbackQuery, bot: Bot) -> None:
     deeplink = referral_deeplink(cb.from_user.id)
     await cb.message.answer(
         _ticket_text(event, number=number, tickets=tickets, deeplink=deeplink),
-        reply_markup=_ticket_keyboard(cb.from_user.id, event.announcement_text),
+        reply_markup=_ticket_keyboard(
+            cb.from_user.id, event.share_text or event.announcement_text
+        ),
         disable_web_page_preview=True,
     )
 

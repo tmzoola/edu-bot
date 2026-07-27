@@ -193,8 +193,13 @@ class ReferralEventAdminView(BaseAdminView):
         StringField("title", label="Sarlavha", required=True),
         TextAreaField(
             "announcement_text",
-            label="E'lon matni",
+            label="E'lon matni (/start'da ko'rsatiladi)",
             required=True,
+        ),
+        TextAreaField(
+            "share_text",
+            label="Ulashish matni (do'stlarga ulashishda). Bo'sh bo'lsa e'lon matni ishlatiladi",
+            required=False,
         ),
         FileField(
             "image_upload",

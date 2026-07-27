@@ -166,7 +166,9 @@ async def _maybe_show_event(msg: Message) -> bool:
         if event is None:
             return False
 
-    kb = announcement_keyboard(msg.from_user.id, event.announcement_text)
+    kb = announcement_keyboard(
+        msg.from_user.id, event.share_text or event.announcement_text
+    )
     photo = _resolve_event_photo(event.image_url)
     if photo is not None:
         try:
