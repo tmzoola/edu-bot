@@ -373,9 +373,11 @@ def _share_promo_text(announcement_text: str | None) -> str:
     # CRLF / CR ni LF ga keltiramiz, nbsp'ni oddiy probelga — aks holda `\r`
     # ketma-ket bo'sh qatorlarni "bo'lib" collapse'ga xalal beradi.
     base = base.replace("\r\n", "\n").replace("\r", "\n").replace(" ", " ")
-    base = re.sub(r"[ \t]*\n[ \t]*(?:\n[ \t]*)+", "\n", base)
-    if len(base) > 500:
-        base = base[:500].rstrip() + "…"
+    base = re.sub(r"[ \t]+\n", "\n", base)      # qator oxiridagi probellar
+    # 2+ bo'sh qator -> KO'PI BILAN 1 bo'sh qator (spacing saqlanadi).
+    base = re.sub(r"\n{3,}", "\n\n", base)
+    if len(base) > 800:
+        base = base[:800].rstrip() + "…"
     return base + "\n\n🎁 Konkursda ishtirok eting va sovg'alarni yutib oling! 🏆"
 
 

@@ -170,7 +170,7 @@ async def _maybe_show_event(msg: Message) -> bool:
     kb = announcement_keyboard(
         msg.from_user.id, event.share_text or event.announcement_text
     )
-    caption = normalize_newlines(event.announcement_text)
+    caption = re.sub(r"\n{3,}", "\n\n", normalize_newlines(event.announcement_text))
     photo = _resolve_event_photo(event.image_url)
     if photo is not None:
         try:
