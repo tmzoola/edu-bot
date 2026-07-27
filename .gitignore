@@ -194,3 +194,4 @@ test-pdf
 
 # Uploaded media (books etc.)
 app/media/
+exported_tests

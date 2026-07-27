@@ -148,8 +148,8 @@ $('send').addEventListener('click', async () => {
     if (!confirm("Xabarni barcha foydalanuvchilarga yuborishni tasdiqlaysizmi?")) return;
 
     const btn = $('send');
-    btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Yuborilmoqda…';
-    showMsg('info', "Yuborilmoqda… Katta ro'yxatda bir necha daqiqa vaqt olishi mumkin.");
+    btn.disabled = true; btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Boshlanmoqda…';
+    showMsg('info', "So'rov yuborilmoqda…");
 
     try {
         const r = await fetch('/admin-tools/broadcast/send', {
@@ -157,10 +157,13 @@ $('send').addEventListener('click', async () => {
             headers: {'Content-Type':'application/json'},
             body: JSON.stringify({ text, button_text, button_url }),
         });
-        const d = await r.json();
+        let d;
+        try { d = await r.json(); }
+        catch(_) { throw new Error("Server kutilmagan javob qaytardi (ehtimol vaqt tugadi). Yuborish fon rejimida davom etayotgan bo'lishi mumkin."); }
         if (!r.ok) throw new Error(d.detail || 'Xatolik');
         showMsg('ok',
-            `✅ Yuborildi: <b>${d.sent}</b> · Bloklangan: <b>${d.blocked}</b> · Xato: <b>${d.failed}</b> · Jami: <b>${d.total}</b>`
+            `✅ Yuborish <b>fon rejimida</b> boshlandi · Jami <b>${d.total}</b> foydalanuvchi. ` +
+            `Yetkazish bir necha daqiqa davom etadi — bu sahifadan chiqib ketsangiz ham to'xtamaydi.`
         );
     } catch(e){
         showMsg('err', e.message || 'Xatolik');

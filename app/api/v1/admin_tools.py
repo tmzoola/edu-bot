@@ -38,7 +38,13 @@ from models.quiz import Quiz
 from models.shop import BookOrder, OrderStatus, ShopBook, ShopSettings
 from models.telegram_user import TelegramUser
 from models.topic import Topic
-from services.notifications import broadcast, notify_new_contest, notify_new_quiz
+from services.notifications import (
+    broadcast,
+    count_broadcast_targets,
+    fire_and_forget,
+    notify_new_contest,
+    notify_new_quiz,
+)
 
 router = APIRouter(prefix="/admin-tools", tags=["admin-tools"])
 templates = Jinja2Templates(directory="templates")
@@ -1245,8 +1251,13 @@ async def broadcast_send(payload: dict[str, Any]):
             inline_keyboard=[[InlineKeyboardButton(text=label, url=url)]]
         )
 
-    stats = await broadcast(text, reply_markup=kb)
-    return {"ok": True, **stats}
+    # Yuborishni FON rejimida ishga tushiramiz va darhol javob qaytaramiz.
+    # Aks holda minglab foydalanuvchiga yuborish daqiqalab davom etib, reverse-
+    # proxy timeout bo'ladi (HTML 504) yoki ulanish uzilib jarayon to'xtaydi.
+    # Har bir foydalanuvchi xatosi `broadcast()` ichida ushlab olinadi.
+    total = await count_broadcast_targets()
+    fire_and_forget(broadcast(text, reply_markup=kb))
+    return {"ok": True, "scheduled": True, "total": total}
 
 
 @router.post("/builder/parse")
