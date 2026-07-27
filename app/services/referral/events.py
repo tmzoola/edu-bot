@@ -345,13 +345,31 @@ def join_buttons(chats: list[TrackedChat]) -> list[list[InlineKeyboardButton]]:
     return rows
 
 
+def normalize_newlines(s: str | None) -> str:
+    r"""Admin kiritgan literal `\n`, `\r\n`, `\t` ketma-ketliklarini haqiqiy
+    belgilarga aylantiradi.
+
+    Dashboard maydonida foydalanuvchi `\n` deb yozib qo'ysa (haqiqiy qator
+    ko'chishi emas), Telegram'da qator ko'chishi ishlashi uchun uni real `\n`
+    ga o'giramiz.
+    """
+    if not s:
+        return ""
+    return (
+        s.replace("\\r\\n", "\n")
+        .replace("\\n", "\n")
+        .replace("\\r", "\n")
+        .replace("\\t", "\t")
+    )
+
+
 def _share_promo_text(announcement_text: str | None) -> str:
     """Ulashish uchun qisqa promo matn (share URL'ga sig'ishi uchun cheklangan).
 
     E'lon matnidagi ketma-ket bo'sh qatorlar (`\\n\\n...`) bitta qatorga
     qisqartiriladi — ulashilgan xabarda katta bo'sh joylar bo'lmasin.
     """
-    base = (announcement_text or "🎉 Konkursda ishtirok eting!").strip()
+    base = (normalize_newlines(announcement_text) or "🎉 Konkursda ishtirok eting!").strip()
     # CRLF / CR ni LF ga keltiramiz, nbsp'ni oddiy probelga — aks holda `\r`
     # ketma-ket bo'sh qatorlarni "bo'lib" collapse'ga xalal beradi.
     base = base.replace("\r\n", "\n").replace("\r", "\n").replace(" ", " ")

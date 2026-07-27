@@ -27,6 +27,7 @@ from models.telegram_user import TelegramUser
 from services.referral.events import (
     announcement_keyboard,
     get_active_event,
+    normalize_newlines,
     record_referral,
 )
 
@@ -169,19 +170,16 @@ async def _maybe_show_event(msg: Message) -> bool:
     kb = announcement_keyboard(
         msg.from_user.id, event.share_text or event.announcement_text
     )
+    caption = normalize_newlines(event.announcement_text)
     photo = _resolve_event_photo(event.image_url)
     if photo is not None:
         try:
-            await msg.answer_photo(
-                photo,
-                caption=event.announcement_text,
-                reply_markup=kb,
-            )
+            await msg.answer_photo(photo, caption=caption, reply_markup=kb)
         except Exception:
             logger.exception("event rasmini yuborib bo'lmadi: event_id=%s", event.id)
-            await msg.answer(event.announcement_text, reply_markup=kb)
+            await msg.answer(caption, reply_markup=kb)
     else:
-        await msg.answer(event.announcement_text, reply_markup=kb)
+        await msg.answer(caption, reply_markup=kb)
 
     # Asosiy menyu tugmalarini (reply keyboard) qayta o'rnatamiz.
     await msg.answer(

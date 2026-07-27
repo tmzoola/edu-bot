@@ -32,6 +32,7 @@ from services.referral.events import (
     count_referral_on_gate,
     get_active_event,
     get_or_create_participant,
+    normalize_newlines,
     referral_deeplink,
     referral_ticket_count,
     share_button,
@@ -158,7 +159,7 @@ def _ticket_text(
     tickets: int,
     deeplink: str,
 ) -> str:
-    header = event.success_text or (
+    header = normalize_newlines(event.success_text) or (
         "🎉 <b>Tabriklaymiz! Siz konkursda ishtirok etyapsiz!</b>"
     )
     return "\n".join([
