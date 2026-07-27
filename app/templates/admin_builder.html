@@ -338,7 +338,7 @@ function addQuestion(data) {
         option_b: data?.option_b || '',
         option_c: data?.option_c || '',
         option_d: data?.option_d || '',
-        correct: data?.correct || 'A',
+        correct: data?.correct || '',
     });
     render();
 }
@@ -363,9 +363,13 @@ function update(i, field, val) {
 async function uploadImage(i, input) {
     const file = input.files && input.files[0];
     if (!file) return;
+    await uploadImageFile(i, file);
+}
+
+async function uploadImageFile(i, file) {
+    if (!file) return;
     const fd = new FormData();
     fd.append('file', file);
-    input.disabled = true;
     try {
         const r = await fetch('/admin-tools/upload-image', { method: 'POST', body: fd });
         const data = await r.json();
@@ -375,7 +379,44 @@ async function uploadImage(i, input) {
         toast('Rasm yuklandi', 'ok');
     } catch (e) {
         toast(e.message, 'err');
-        input.disabled = false;
+    }
+}
+
+function handlePaste(event, i) {
+    const items = event.clipboardData && event.clipboardData.items;
+    if (!items) return;
+    for (const it of items) {
+        if (it.kind === 'file' && it.type.startsWith('image/')) {
+            const file = it.getAsFile();
+            if (file) {
+                event.preventDefault();
+                uploadImageFile(i, file);
+                return;
+            }
+        }
+    }
+}
+
+async function pasteImage(i) {
+    try {
+        if (!navigator.clipboard || !navigator.clipboard.read) {
+            toast('Brauzer clipboard rasm o\'qishni qo\'llab-quvvatlamaydi. Ctrl+V bilan urinib ko\'ring.', 'err');
+            return;
+        }
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+            const imgType = item.types.find(t => t.startsWith('image/'));
+            if (imgType) {
+                const blob = await item.getType(imgType);
+                const ext = imgType.split('/')[1] || 'png';
+                const file = new File([blob], `pasted.${ext}`, {type: imgType});
+                await uploadImageFile(i, file);
+                return;
+            }
+        }
+        toast('Clipboardda rasm topilmadi', 'err');
+    } catch (e) {
+        toast('Rasmni o\'qib bo\'lmadi: ' + e.message, 'err');
     }
 }
 
@@ -395,7 +436,7 @@ function render() {
     }
 
     list.innerHTML = questions.map((q, i) => `
-        <div class="q-item">
+        <div class="q-item" onpaste="handlePaste(event, ${i})">
             <div class="q-num">${i+1}</div>
             <button class="q-del" onclick="delQuestion(${i})" title="O'chirish"><i class="fa fa-trash"></i></button>
             <div class="q-content">
@@ -410,11 +451,14 @@ function render() {
                             <i class="fa fa-image"></i> Rasm yuklash
                             <input type="file" accept="image/*" style="display:none" onchange="uploadImage(${i}, this)">
                         </label>
+                        <button type="button" class="q-img-btn" style="margin-left:6px" onclick="pasteImage(${i})" title="Clipboard'dan yopishtirish (Ctrl+V)">
+                            <i class="fa fa-paste"></i> Yopishtirish
+                        </button>
                     `}
                 </div>
                 <div class="q-text">
-                    <textarea class="textarea" placeholder="Savol matni (rasm bo'lsa ixtiyoriy)" style="min-height:52px"
-                              oninput="update(${i},'text',this.value)">${esc(q.text)}</textarea>
+                    <textarea class="textarea auto-grow" placeholder="Savol matni (rasm bo'lsa ixtiyoriy)" style="min-height:52px;overflow:hidden;resize:none"
+                              oninput="update(${i},'text',this.value); autoGrow(this)">${esc(q.text)}</textarea>
                 </div>
                 <div class="q-options">
                     ${['A','B','C','D'].map(L => `
@@ -427,10 +471,16 @@ function render() {
                         </label>
                     `).join('')}
                 </div>
-                <div class="q-hint"><i class="fa fa-circle-check"></i> To'g'ri javob: <b style="color:#22c98a">${q.correct}</b></div>
+                ${q.correct ? `<div class="q-hint"><i class="fa fa-circle-check"></i> To'g'ri javob: <b style="color:#22c98a">${q.correct}</b></div>` : `<div class="q-hint" style="color:#dc2626"><i class="fa fa-circle-exclamation" style="color:#dc2626"></i> To'g'ri javobni tanlang</div>`}
             </div>
         </div>
     `).join('');
+    list.querySelectorAll('textarea.auto-grow').forEach(autoGrow);
+}
+
+function autoGrow(el) {
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
 }
 
 function esc(s) {
@@ -498,6 +548,8 @@ async function save() {
     if (!topic_id && !new_topic_title) { toast('Mavzu tanlang yoki yangisini yarating', 'err'); return; }
     if (!quiz_title) { toast('Test sarlavhasini kiriting', 'err'); return; }
     if (!questions.length) { toast('Kamida bitta savol qo\'shing', 'err'); return; }
+    const missing = questions.findIndex(q => !q.correct);
+    if (missing !== -1) { toast(`${missing+1}-savolda to'g'ri javob tanlanmagan`, 'err'); return; }
 
     const btn = document.getElementById('btn-save');
     btn.disabled = true;
