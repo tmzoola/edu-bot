@@ -349,7 +349,7 @@ def _share_promo_text(announcement_text: str | None) -> str:
     base = (announcement_text or "🎉 Konkursda ishtirok eting!").strip()
     if len(base) > 500:
         base = base[:500].rstrip() + "…"
-    return base + "\n\n🎁 Konkursda ishtirok eting va sovg'alarni yutib oling! 👇"
+    return base + "\n\n🎁 Konkursda ishtirok eting va sovg'alarni yutib oling! 🏆"
 
 
 def share_button(
@@ -357,14 +357,19 @@ def share_button(
 ) -> InlineKeyboardButton:
     """`t.me/share/url` tugmasi — inline mode TALAB QILMAYDI.
 
-    Bosilganda native "ulashish" oynasi ochiladi va tanlangan chatga promo matn
-    yuboriladi. Deep-link `url` paramda EMAS, balki matnning OXIRIGA qo'yiladi —
-    aks holda Telegram uni xabarning tepasida ko'rsatadi (`url` matndan oldin
-    chiqadi). Shu tufayli havola promo matndan keyin, pastda ko'rinadi.
+    Bosilganda native "ulashish" oynasi ochiladi va tanlangan chatga deep-link
+    (`url`) + promo matn (`text`) yuboriladi. `url` bo'sh bo'lmasligi shart —
+    aks holda ulashish oynasi ochilmaydi. (Telegram `url`ni matndan oldin,
+    tepada ko'rsatadi.)
     """
     deeplink = referral_deeplink(inviter_tg_id)
-    text = _share_promo_text(announcement_text) + "\n\n" + deeplink
-    url = "https://t.me/share/url?url=&text=" + quote(text, safe="")
+    text = _share_promo_text(announcement_text)
+    url = (
+        "https://t.me/share/url?url="
+        + quote(deeplink, safe="")
+        + "&text="
+        + quote(text, safe="")
+    )
     return InlineKeyboardButton(text="📤 Do'stlarga ulashish", url=url)
 
 
