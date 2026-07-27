@@ -170,8 +170,11 @@ def _ticket_text(
         "🔗 <b>Sizning shaxsiy taklif havolangiz:</b>",
         deeplink,
         "",
-        "👥 Do'stingiz shu havola orqali botga kirib obuna bo'lsa — sizga <b>+1 chipta</b>! 🎫",
-        "🏆 Eng ko'p taklif qilgan ishtirokchilar g'olib bo'ladi!",
+        "Hurmatli ustoz, ushbu havolani boshqa ustozlar bilan ulashing va "
+        "ularni ushbu tanlovda ishtirok etishga taklif qiling. 🤝",
+        "",
+        "Birgalikda bilim va tajribamizni bo'lishaylik — har bir taklif qilingan "
+        "ishtirokchi g'alaba imkoniyatingizni oshiradi! 🌟",
     ])
 
 
