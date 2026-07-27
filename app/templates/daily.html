@@ -86,6 +86,16 @@
 .rev-exp{padding-left:30px;font-size:.78rem;color:var(--muted);margin-top:6px;line-height:1.5}
 
 .loader{text-align:center;padding:60px 20px;color:var(--muted)}
+
+/* Modullar ro'yxati (Kunlik test ostida) */
+.mod-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.mod{background:#fff;border-radius:16px;padding:16px;box-shadow:var(--shadow);transition:.15s;display:flex;flex-direction:column}
+.mod:active{transform:scale(.98)}
+.mod-ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.15rem;margin-bottom:12px}
+.mod-t{font-size:.95rem;font-weight:700;line-height:1.25;margin-bottom:3px;color:#111}
+.mod-s{font-size:.72rem;color:var(--muted)}
+.mod-go{margin-top:14px;font-size:.76rem;font-weight:700;color:var(--green);display:flex;align-items:center;gap:5px}
+.mod-go svg{width:13px;height:13px}
 </style>
 {% endblock %}
 
@@ -106,6 +116,16 @@
 <div id="view-intro"><div class="loader">Yuklanmoqda…</div></div>
 <div id="view-quiz" style="display:none"></div>
 <div id="view-result" style="display:none"></div>
+
+<div id="view-modules">
+  <div class="section-t big" style="margin-top:22px">Modullar</div>
+  <div id="mods" class="mod-grid"></div>
+  <div id="mods-empty" class="empty" style="display:none">
+    <div class="empty-ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div>
+    <div class="empty-t">Hozircha modullar yo'q</div>
+    <div class="empty-d">Admin panelidan yangi modullar qo'shiladi</div>
+  </div>
+</div>
 {% endblock %}
 
 {% block script %}
@@ -117,6 +137,7 @@ let startedAt = 0, timeLeft = 0, timerHandle = null;
 
 async function init(){
     await MK.ensureAuth();
+    loadModules();  // Kunlik test holatidan qat'i nazar modullarni ko'rsatamiz.
     const r = await fetch('/api/v1/webapp/daily', { headers: MK.authHeaders() });
     D = await r.json().catch(() => null);
     if (!D || !D.available) {
@@ -124,14 +145,54 @@ async function init(){
             `<div class="empty"><div class="empty-ic">🗓️</div>
              <div class="empty-t">Kunlik test hozircha yo'q</div>
              <div class="empty-d">Savollar qo'shilgach, bu yerda paydo bo'ladi</div></div>`;
+        show('intro');
         return;
     }
     renderIntro();
 }
 
+const MOD_COLORS = [
+  {bg:'rgba(61,182,106,.12)', fg:'#3DB66A'},
+  {bg:'rgba(58,109,181,.12)', fg:'#3A6DB5'},
+  {bg:'rgba(139,92,246,.12)', fg:'#8B5CF6'},
+  {bg:'rgba(233,78,119,.12)', fg:'#E94E77'},
+  {bg:'rgba(181,129,46,.12)', fg:'#B5812E'},
+  {bg:'rgba(14,165,233,.12)', fg:'#0EA5E9'},
+];
+const MOD_ICONS = ['🧮','📚','🌍','🔬','🎨','⚛️','🧬','📖'];
+
+async function loadModules(){
+    try {
+        const r = await fetch('/api/v1/webapp/modules');
+        const mods = await r.json();
+        if (!Array.isArray(mods) || !mods.length){
+            document.getElementById('mods-empty').style.display = '';
+            return;
+        }
+        document.getElementById('mods').innerHTML = mods.map((m, i) => {
+            const c = MOD_COLORS[i % MOD_COLORS.length];
+            const icon = m.icon || MOD_ICONS[i % MOD_ICONS.length];
+            const iconInner = m.icon?.startsWith('fa ') ? `<i class="${m.icon}"></i>` : icon;
+            return `
+            <a href="/webapp/modules/${m.id}" class="mod">
+                <div class="mod-ic" style="background:${c.bg};color:${c.fg}">${iconInner}</div>
+                <div class="mod-t">${esc(m.title)}</div>
+                <div class="mod-s">${(m.quiz_count ?? 0)} ta test</div>
+                <div class="mod-go">Boshlash
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </div>
+            </a>`;
+        }).join('');
+    } catch(e){
+        document.getElementById('mods-empty').style.display = '';
+    }
+}
+
 function show(view){
     ['intro','quiz','result'].forEach(v =>
         document.getElementById('view-'+v).style.display = (v===view?'':'none'));
+    // Modullar ro'yxati faqat intro (test boshlanmagan) holatida ko'rinadi.
+    document.getElementById('view-modules').style.display = (view==='intro' ? '' : 'none');
     window.scrollTo(0,0);
 }
 

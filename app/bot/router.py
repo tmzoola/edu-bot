@@ -27,7 +27,8 @@ from models.telegram_user import TelegramUser
 from services.referral.events import (
     announcement_keyboard,
     get_active_event,
-    get_active_tracked_chats,
+    normalize_newlines,
+    record_referral,
 )
 
 _TZ = ZoneInfo("Asia/Tashkent")
@@ -165,22 +166,20 @@ async def _maybe_show_event(msg: Message) -> bool:
         event = await get_active_event(session, now)
         if event is None:
             return False
-        chats = await get_active_tracked_chats(session)
 
-    kb = announcement_keyboard(chats)
+    kb = announcement_keyboard(
+        msg.from_user.id, event.share_text or event.announcement_text
+    )
+    caption = re.sub(r"\n{3,}", "\n\n", normalize_newlines(event.announcement_text))
     photo = _resolve_event_photo(event.image_url)
     if photo is not None:
         try:
-            await msg.answer_photo(
-                photo,
-                caption=event.announcement_text,
-                reply_markup=kb,
-            )
+            await msg.answer_photo(photo, caption=caption, reply_markup=kb)
         except Exception:
             logger.exception("event rasmini yuborib bo'lmadi: event_id=%s", event.id)
-            await msg.answer(event.announcement_text, reply_markup=kb)
+            await msg.answer(caption, reply_markup=kb)
     else:
-        await msg.answer(event.announcement_text, reply_markup=kb)
+        await msg.answer(caption, reply_markup=kb)
 
     # Asosiy menyu tugmalarini (reply keyboard) qayta o'rnatamiz.
     await msg.answer(
@@ -192,23 +191,34 @@ async def _maybe_show_event(msg: Message) -> bool:
 
 @router.message(CommandStart())
 async def start_handler(msg: Message, state: FSMContext, command: CommandObject):
+    # Referral/konkurs oqimi faqat shaxsiy chatda ishlaydi. Guruh/kanalда a'zolar
+    # deep-link bosganda Telegram `/start@bot` ni guruhga yuboradi — bu foydasiz
+    # clutter. Bot admin bo'lsa o'sha buyruq xabarini o'chiramiz; javob yozmaymiz.
+    if msg.chat.type != "private":
+        try:
+            await msg.delete()
+        except Exception:  # noqa: BLE001 — o'chirish huquqi yo'q bo'lishi mumkin
+            pass
+        return
     await state.clear()
     user = await get_or_create_user(msg.from_user)
 
-    # /start ref_<inviter_tg_id> — inline "Qatnashaman" tugmasi orqali kelgan.
-    # Hozircha inviter ma'lumotini log qilamiz; asosiy referral hisob-kitob
-    # invite link'lar orqali TrackedChat'ga qo'shilganda yuritiladi.
+    # /start ref_<inviter_tg_id> — deep-link orqali kelgan taklif.
+    # Faol event bo'lsa kutilayotgan referral yoziladi; taklif qilingan
+    # foydalanuvchi obuna gate'dan o'tgach chipta sifatida hisoblanadi.
     args = (command.args or "").strip()
-    if args.startswith("ref_"):
-        try:
-            inviter_tg_id = int(args[4:])
-            logger.info(
-                "start deep-link: user=%s inviter=%s",
-                msg.from_user.id,
-                inviter_tg_id,
-            )
-        except ValueError:
-            pass
+    if args.startswith("ref_") and args[4:].isdigit():
+        inviter_tg_id = int(args[4:])
+        now = datetime.now(_TZ)
+        async with session_factory() as session:
+            event = await get_active_event(session, now)
+            if event is not None:
+                await record_referral(
+                    session,
+                    event_id=event.id,
+                    inviter_tg_id=inviter_tg_id,
+                    invited_tg_id=msg.from_user.id,
+                )
 
     if not user.is_registered:
         await msg.answer(

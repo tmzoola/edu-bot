@@ -193,8 +193,13 @@ class ReferralEventAdminView(BaseAdminView):
         StringField("title", label="Sarlavha", required=True),
         TextAreaField(
             "announcement_text",
-            label="E'lon matni",
+            label="E'lon matni (/start'da ko'rsatiladi)",
             required=True,
+        ),
+        TextAreaField(
+            "share_text",
+            label="Ulashish matni (do'stlarga ulashishda). Bo'sh bo'lsa e'lon matni ishlatiladi",
+            required=False,
         ),
         FileField(
             "image_upload",
@@ -293,6 +298,43 @@ class ReferralEventAdminView(BaseAdminView):
                 except OSError:
                     pass
         return await super().delete(request, pks)
+
+
+class EventReferralAdminView(BaseAdminView):
+    """Bot deep-link orqali taklif qilinganlar — read-only (chipta manbasi)."""
+
+    name = "Konkurs taklifi"
+    label = "Referral: konkurs takliflari"
+    icon = "fa fa-share-nodes"
+
+    fields = [
+        "id",
+        HasOne("event", label="Konkurs", identity="referral-event"),
+        HasOne("inviter", label="Taklif qiluvchi", identity="foydalanuvchi"),
+        IntegerField("invited_tg_id", label="Taklif qilingan (TG ID)", read_only=True),
+        HasOne("invited", label="Taklif qilingan", identity="foydalanuvchi"),
+        BooleanField("counted", label="Hisoblangan (chipta)", read_only=True),
+        "createdAt",
+    ]
+
+    column_list = [
+        "id",
+        "event",
+        "inviter",
+        "invited_tg_id",
+        "counted",
+        "createdAt",
+    ]
+    column_searchable_list = ["invited_tg_id"]
+    column_sortable_list = ["counted", "createdAt"]
+    column_filters = ["counted"]
+    fields_default_sort = [("createdAt", True)]
+
+    def can_create(self, request: Request) -> bool:
+        return False
+
+    def can_edit(self, request: Request) -> bool:
+        return False
 
 
 class ReferralEventParticipantAdminView(BaseAdminView):

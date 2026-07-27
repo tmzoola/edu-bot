@@ -32,7 +32,11 @@ from sqlalchemy import select
 from core.config import settings
 from db.session import session_factory
 from models.telegram_user import TelegramUser
-from services.referral.events import get_active_event, get_active_tracked_chats
+from services.referral.events import (
+    get_active_event,
+    get_active_tracked_chats,
+    referral_deeplink,
+)
 from services.referral.invite_links import get_or_create_invite_link
 
 logger = logging.getLogger(__name__)
@@ -67,37 +71,47 @@ def _resolve_photo_url(image_url: str | None) -> str | None:
 
 
 async def _build_caption(session, bot, event, inviter_tg_id: int) -> str:
-    """E'lon matni + inviter shaxsiy invite linklari (mavjud bo'lsa)."""
+    """E'lon matni + inviter shaxsiy deep-link havolasi + CTA (har doim to'la)."""
     base = (event.announcement_text or "🎉 Konkursda ishtirok eting!").strip()
+    deeplink = referral_deeplink(inviter_tg_id)
+
+    parts = [
+        base,
+        "",
+        "🔗 <b>Shaxsiy taklif havolangiz:</b>",
+        deeplink,
+    ]
 
     user = (
         await session.execute(
             select(TelegramUser).where(TelegramUser.telegram_id == inviter_tg_id)
         )
     ).scalar_one_or_none()
-    if user is None:
-        return base
+    if user is not None:
+        chan_lines: list[str] = []
+        for chat in await get_active_tracked_chats(session):
+            try:
+                link = await get_or_create_invite_link(
+                    session, bot, user_id=user.id, tracked_chat_id=chat.id
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "inline: invite link olib bo'lmadi chat=%s user=%s",
+                    chat.id, user.id,
+                )
+                continue
+            icon = "📢" if chat.type == "channel" else "👥"
+            chan_lines.append(f"{icon} <b>{chat.title}</b>:\n{link.invite_link}")
+        if chan_lines:
+            parts.append("")
+            parts.append("📌 Kanal/guruhlar:")
+            parts.extend(chan_lines)
 
-    chats = await get_active_tracked_chats(session)
-    lines: list[str] = []
-    for chat in chats:
-        try:
-            link = await get_or_create_invite_link(
-                session, bot, user_id=user.id, tracked_chat_id=chat.id
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception(
-                "inline: invite link olib bo'lmadi chat=%s user=%s",
-                chat.id,
-                user.id,
-            )
-            continue
-        icon = "📢" if chat.type == "channel" else "👥"
-        lines.append(f"{icon} <b>{chat.title}</b>:\n{link.invite_link}")
-
-    if not lines:
-        return base
-    return base + "\n\n" + "\n\n".join(lines)
+    parts += [
+        "",
+        "🎁 Konkursda ishtirok eting va qimmatbaho sovg'alarni yutib oling! 🏆",
+    ]
+    return "\n".join(parts)
 
 
 @router.inline_query()

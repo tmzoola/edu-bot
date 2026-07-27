@@ -43,6 +43,16 @@ async def _reengagement_loop() -> None:
 async def main() -> None:
     setup_logging()
 
+    # Bot username'ini aniqlab, referral deep-linklari uchun keshlaymiz.
+    from services.referral.events import set_bot_username
+
+    try:
+        me = await bot.get_me()
+        set_bot_username(me.username)
+        logger.info("✅ Bot username aniqlandi: @%s", me.username)
+    except Exception:
+        logger.exception("get_me failed — deep-link uchun settings.BOT_USERNAME ishlatiladi")
+
     from aiogram.types import BotCommand, BotCommandScopeDefault
 
     try:

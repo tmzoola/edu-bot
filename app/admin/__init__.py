@@ -9,6 +9,7 @@ from admin.views.module import ModuleAdminView
 from admin.views.question import QuestionAdminView
 from admin.views.quiz import QuizAdminView
 from admin.views.referral import (
+    EventReferralAdminView,
     InviteJoinAdminView,
     InviteLinkAdminView,
     ReferralEventAdminView,
@@ -29,7 +30,11 @@ from models.module import Module
 from models.question import Question
 from models.quiz import Quiz
 from models.referral import InviteJoin, InviteLink, TrackedChat
-from models.referral_event import ReferralEvent, ReferralEventParticipant
+from models.referral_event import (
+    EventReferral,
+    ReferralEvent,
+    ReferralEventParticipant,
+)
 from models.rewards import RewardTier, UserReward
 from models.shop import BookOrder, ShopBook, ShopSettings
 from models.telegram_user import TelegramUser
@@ -65,6 +70,8 @@ def setup_admin(app: FastAPI) -> None:
         views=[
             Link(label="Test yaratish", icon="fa fa-wand-magic-sparkles",
                  url="/admin-tools/builder"),
+            Link(label="Excel orqali test", icon="fa fa-file-excel",
+                 url="/admin-tools/quiz-import"),
             Link(label="Kitob yuklash", icon="fa fa-file-arrow-up",
                  url="/admin-tools/books"),
             ModuleAdminView(Module, identity="modul"),
@@ -120,11 +127,16 @@ def setup_admin(app: FastAPI) -> None:
         label="Referral",
         icon="fa fa-user-plus",
         views=[
+            Link(label="Konkurs g'oliblari", icon="fa fa-trophy",
+                 url="/admin-tools/event-leaderboard"),
             Link(label="Top inviterlar", icon="fa fa-medal",
                  url="/admin-tools/referral-leaderboard"),
             ReferralEventAdminView(ReferralEvent, identity="referral-event"),
             ReferralEventParticipantAdminView(
                 ReferralEventParticipant, identity="referral-event-participant"
+            ),
+            EventReferralAdminView(
+                EventReferral, identity="referral-event-referral"
             ),
             TrackedChatAdminView(TrackedChat, identity="referral-tracked-chat"),
             InviteLinkAdminView(InviteLink, identity="referral-invite-link"),

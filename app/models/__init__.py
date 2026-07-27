@@ -11,7 +11,11 @@ from models.quote import MotivationalQuote
 from models.landing import LandingContent
 from models.guard import JoinEvent, FlaggedUser
 from models.referral import TrackedChat, InviteLink, InviteJoin
-from models.referral_event import ReferralEvent, ReferralEventParticipant
+from models.referral_event import (
+    EventReferral,
+    ReferralEvent,
+    ReferralEventParticipant,
+)
 
 __all__ = [
     "Base",
@@ -35,4 +39,5 @@ __all__ = [
     "InviteJoin",
     "ReferralEvent",
     "ReferralEventParticipant",
+    "EventReferral",
 ]

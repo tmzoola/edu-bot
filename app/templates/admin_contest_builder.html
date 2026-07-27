@@ -272,18 +272,24 @@ if (initial) {
 }
 
 function addQ(prefill){
-    questions.push(prefill || {text:'', image_url:'', option_a:'', option_b:'', option_c:'', option_d:'', correct:'A', explanation:''});
+    questions.push(prefill || {text:'', image_url:'', option_a:'', option_b:'', option_c:'', option_d:'', correct:'', explanation:''});
     render();
 }
 
 function delQ(i){ questions.splice(i,1); render(); }
 
+function autoGrow(el){ el.style.height='auto'; el.style.height=el.scrollHeight+'px'; }
+
 async function uploadImage(i, input){
     const file = input.files && input.files[0];
     if (!file) return;
+    await uploadImageFile(i, file);
+}
+
+async function uploadImageFile(i, file){
+    if (!file) return;
     const fd = new FormData();
     fd.append('file', file);
-    input.disabled = true;
     try {
         const r = await fetch('/admin-tools/upload-image', { method:'POST', body: fd });
         const data = await r.json();
@@ -293,7 +299,40 @@ async function uploadImage(i, input){
         toast('Rasm yuklandi', 'ok');
     } catch (e) {
         toast(e.message, 'err');
-        input.disabled = false;
+    }
+}
+
+function handlePaste(event, i){
+    const items = event.clipboardData && event.clipboardData.items;
+    if (!items) return;
+    for (const it of items) {
+        if (it.kind === 'file' && it.type.startsWith('image/')) {
+            const file = it.getAsFile();
+            if (file) { event.preventDefault(); uploadImageFile(i, file); return; }
+        }
+    }
+}
+
+async function pasteImage(i){
+    try {
+        if (!navigator.clipboard || !navigator.clipboard.read) {
+            toast('Brauzer clipboard rasm o\'qishni qo\'llab-quvvatlamaydi. Ctrl+V bilan urinib ko\'ring.', 'err');
+            return;
+        }
+        const items = await navigator.clipboard.read();
+        for (const item of items) {
+            const imgType = item.types.find(t => t.startsWith('image/'));
+            if (imgType) {
+                const blob = await item.getType(imgType);
+                const ext = imgType.split('/')[1] || 'png';
+                const file = new File([blob], `pasted.${ext}`, {type: imgType});
+                await uploadImageFile(i, file);
+                return;
+            }
+        }
+        toast('Clipboardda rasm topilmadi', 'err');
+    } catch (e) {
+        toast('Rasmni o\'qib bo\'lmadi: ' + e.message, 'err');
     }
 }
 
@@ -302,7 +341,7 @@ function removeImage(i){ questions[i].image_url = ''; render(); }
 function render(){
     const list = document.getElementById('q-list');
     list.innerHTML = questions.map((q,i) => `
-        <div class="q-item">
+        <div class="q-item" onpaste="handlePaste(event, ${i})">
             <div class="q-num">${i+1}</div>
             <button class="q-del" onclick="delQ(${i})"><i class="fa fa-trash"></i></button>
             <div class="q-content">
@@ -317,9 +356,12 @@ function render(){
                             <i class="fa fa-image"></i> Rasm yuklash
                             <input type="file" accept="image/*" style="display:none" onchange="uploadImage(${i}, this)">
                         </label>
+                        <button type="button" class="q-img-btn" style="margin-left:6px" onclick="pasteImage(${i})" title="Clipboard'dan yopishtirish (Ctrl+V)">
+                            <i class="fa fa-paste"></i> Yopishtirish
+                        </button>
                     `}
                 </div>
-                <textarea class="textarea" placeholder="Savol matni (rasm bo'lsa ixtiyoriy)" data-i="${i}" data-k="text">${escapeHtml(q.text)}</textarea>
+                <textarea class="textarea auto-grow" placeholder="Savol matni (rasm bo'lsa ixtiyoriy)" style="overflow:hidden;resize:none" data-i="${i}" data-k="text">${escapeHtml(q.text)}</textarea>
                 <div class="q-options">
                     ${['A','B','C','D'].map(L => `
                         <label class="q-opt ${q.correct===L?'is-correct':''}">
@@ -338,11 +380,13 @@ function render(){
             const i = +e.target.dataset.i;
             const k = e.target.dataset.k;
             questions[i][k] = e.target.value;
+            if (e.target.classList.contains('auto-grow')) autoGrow(e.target);
         });
         el.addEventListener('change', e => {
             if (e.target.dataset.k === 'correct') render();
         });
     });
+    list.querySelectorAll('textarea.auto-grow').forEach(autoGrow);
     updateCount();
 }
 

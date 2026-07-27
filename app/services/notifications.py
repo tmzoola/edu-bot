@@ -57,6 +57,38 @@ async def _target_user_ids() -> list[int]:
         return [r[0] for r in rows.all()]
 
 
+async def count_broadcast_targets() -> int:
+    """Xabar yuboriladigan (bloklanmagan, banlanmagan) foydalanuvchilar soni."""
+    from sqlalchemy import func
+
+    async with session_factory() as session:
+        result = await session.execute(
+            select(func.count())
+            .select_from(TelegramUser)
+            .where(
+                TelegramUser.is_blocked == False,  # noqa: E712
+                TelegramUser.is_banned == False,  # noqa: E712
+            )
+        )
+        return int(result.scalar_one())
+
+
+# Fon rejimidagi task'larni GC yeb ketmasligi uchun kuchli havola saqlaymiz.
+_bg_tasks: set[asyncio.Task] = set()
+
+
+def fire_and_forget(coro) -> asyncio.Task:
+    """Coroutine'ni request umridan mustaqil fon task sifatida ishga tushiradi.
+
+    So'rov (yoki reverse-proxy) uzilsa ham task bekor bo'lmaydi — uzoq davom
+    etadigan broadcast to'liq yakuniga yetadi.
+    """
+    task = asyncio.create_task(coro)
+    _bg_tasks.add(task)
+    task.add_done_callback(_bg_tasks.discard)
+    return task
+
+
 async def _mark_blocked(telegram_id: int) -> None:
     async with session_factory() as session:
         result = await session.execute(
@@ -84,7 +116,10 @@ async def broadcast(
             sent += 1
         except TelegramForbiddenError:
             blocked += 1
-            await _mark_blocked(tg_id)
+            try:
+                await _mark_blocked(tg_id)
+            except Exception:  # noqa: BLE001
+                logger.exception("broadcast: _mark_blocked failed for %s", tg_id)
         except TelegramRetryAfter as e:
             await asyncio.sleep(e.retry_after)
             try:
