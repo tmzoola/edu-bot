@@ -21,6 +21,7 @@ from aiogram.types import (
 )
 from sqlalchemy import select
 
+from core.config import settings
 from core.exceptions import AppException
 from db.session import session_factory
 from models.referral import TrackedChat
@@ -72,7 +73,19 @@ async def _get_user(tg_id: int) -> TelegramUser | None:
 
 @router.callback_query(F.data.in_({SUBSCRIBED_CB, REFRESH_CB}))
 async def on_subscribed(cb: CallbackQuery, bot: Bot) -> None:
-    """"Obuna bo'ldim" / "Yangilash" bosilganda a'zolikni tekshiradi."""
+    """"Obuna bo'ldim" / "Yangilash" bosilganda a'zolikni tekshiradi.
+
+    FAQAT shaxsiy chatda ishlaydi — guruh/kanalда bosilsa bot u yerga xabar
+    yozmasin (aks holda guruhga spam bo'ladi).
+    """
+    # Guruh/supergruh/kanalда — javobni faqat ephemeral alert sifatida beramiz.
+    if cb.message is None or cb.message.chat.type != "private":
+        await cb.answer(
+            f"Iltimos, botni shaxsiy chatda oching: @{settings.BOT_USERNAME}",
+            show_alert=True,
+        )
+        return
+
     await cb.answer()
 
     now = datetime.now(_TZ)

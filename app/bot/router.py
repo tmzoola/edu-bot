@@ -191,6 +191,10 @@ async def _maybe_show_event(msg: Message) -> bool:
 
 @router.message(CommandStart())
 async def start_handler(msg: Message, state: FSMContext, command: CommandObject):
+    # Referral/konkurs oqimi faqat shaxsiy chatda ishlaydi. Guruh/kanalда bot
+    # admin bo'lsa ham /start ga javob yozmasin (aks holda guruhga spam bo'ladi).
+    if msg.chat.type != "private":
+        return
     await state.clear()
     user = await get_or_create_user(msg.from_user)
 
