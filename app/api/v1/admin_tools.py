@@ -277,6 +277,319 @@ async def builder_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
     }
 
 
+# ═══ Excel orqali test import ══════════════════════════════════════
+
+# Excel faqat SAVOL ustunlarini o'z ichiga oladi. Modul / Mavzu / Test nomi va
+# vaqt sahifadagi forma orqali kiritiladi. Rasm keyin testni tahrirlab qo'yiladi.
+#   text → Savol   a/b/c/d → variantlar   correct → To'g'ri javob (A-D)
+#   explanation → Izoh
+_QUIZ_XLSX_HEADERS = [
+    "Savol", "A", "B", "C", "D", "To'g'ri javob", "Izoh",
+]
+
+# Excel sarlavhalarini kanonik kalitga bog'lash (normallashtirilgan holda).
+_HEADER_ALIASES: dict[str, str] = {
+    "savol": "text", "savolmatni": "text", "question": "text", "text": "text",
+    "a": "a", "varianta": "a", "avariant": "a",
+    "b": "b", "variantb": "b", "bvariant": "b",
+    "c": "c", "variantc": "c", "cvariant": "c",
+    "d": "d", "variantd": "d", "dvariant": "d",
+    "javob": "correct", "togri": "correct", "togrijavob": "correct",
+    "javobi": "correct", "correct": "correct", "answer": "correct",
+    "izoh": "explanation", "tushuntirish": "explanation",
+    "explanation": "explanation",
+}
+
+MAX_QUIZ_XLSX_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+def _norm_header(s: str) -> str:
+    """Sarlavhani solishtirish uchun normallashtiradi (faqat harf/raqam)."""
+    s = (s or "").strip().lower().replace("'", "").replace("'", "").replace("`", "")
+    return re.sub(r"[^a-z0-9]", "", s)
+
+
+def _parse_correct(val: Any) -> str | None:
+    """To'g'ri javobni A-D ga keltiradi (A-D, a-d yoki 1-4 qabul qilinadi)."""
+    s = str(val or "").strip().upper()
+    if s in ("A", "B", "C", "D"):
+        return s
+    if s in ("1", "2", "3", "4"):
+        return "ABCD"[int(s) - 1]
+    return None
+
+
+def _parse_quiz_questions(data: bytes) -> tuple[list[dict], list[str]]:
+    """Excel faylni savollar ro'yxatiga ajratadi (Modul/Mavzu/Test sahifadan).
+
+    Returns:
+        `(questions, errors)`. `questions` — har biri `{text, option_a..d,
+        correct, explanation}`. `errors` — o'tkazib yuborilgan qatorlar bo'yicha
+        ogohlantirishlar. Rasm ustuni yo'q — rasm keyin tahrirlash orqali qo'yiladi.
+
+    Raises:
+        HTTPException(400) — fayl ochilmasa yoki majburiy ustunlar yo'q bo'lsa.
+    """
+    from openpyxl import load_workbook
+
+    try:
+        wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(400, f"Excel faylni o'qib bo'lmadi: {exc}") from exc
+
+    ws = wb.active
+    rows_iter = ws.iter_rows(values_only=True)
+    header = next(rows_iter, None)
+    if not header:
+        raise HTTPException(400, "Fayl bo'sh — sarlavha qatori topilmadi")
+
+    colmap: dict[str, int] = {}
+    for idx, name in enumerate(header):
+        key = _HEADER_ALIASES.get(_norm_header(str(name if name is not None else "")))
+        if key and key not in colmap:
+            colmap[key] = idx
+
+    required = ["text", "a", "b", "c", "d", "correct"]
+    missing = [c for c in required if c not in colmap]
+    if missing:
+        label = {
+            "text": "Savol", "a": "A", "b": "B",
+            "c": "C", "d": "D", "correct": "To'g'ri javob",
+        }
+        raise HTTPException(
+            400,
+            "Quyidagi majburiy ustunlar topilmadi: "
+            + ", ".join(label[c] for c in missing)
+            + ". Shablonni yuklab olib, ustun nomlarini o'zgartirmang.",
+        )
+
+    def cell(row: tuple, key: str) -> str:
+        idx = colmap.get(key)
+        if idx is None or idx >= len(row):
+            return ""
+        v = row[idx]
+        return "" if v is None else str(v).strip()
+
+    questions: list[dict] = []
+    errors: list[str] = []
+
+    for rownum, row in enumerate(rows_iter, start=2):
+        if row is None or all(c is None or str(c).strip() == "" for c in row):
+            continue  # bo'sh qator
+
+        text = cell(row, "text")
+        a = cell(row, "a")
+        b = cell(row, "b")
+        c = cell(row, "c")
+        d = cell(row, "d")
+        correct = _parse_correct(cell(row, "correct"))
+
+        problems = []
+        if not text:
+            problems.append("Savol matni bo'sh")
+        if not (a and b and c and d):
+            problems.append("A-D variantlarning hammasi to'ldirilishi kerak")
+        if correct is None:
+            problems.append("To'g'ri javob A/B/C/D bo'lishi kerak")
+        if problems:
+            errors.append(f"{rownum}-qator: " + "; ".join(problems))
+            continue
+
+        questions.append({
+            "text": text,
+            "option_a": a, "option_b": b, "option_c": c, "option_d": d,
+            "correct": correct,
+            "explanation": cell(row, "explanation") or None,
+        })
+
+    return questions, errors
+
+
+@router.get("/quiz-import", response_class=HTMLResponse)
+async def quiz_import_page(request: Request, db: AsyncSession = Depends(get_db)):
+    modules = (await db.execute(select(Module).order_by(Module.order, Module.id))).scalars().all()
+    topics = (await db.execute(select(Topic).order_by(Topic.order, Topic.id))).scalars().all()
+    return templates.TemplateResponse(
+        "admin_quiz_import.html",
+        {
+            "request": request,
+            "modules": [{"id": m.id, "title": m.title} for m in modules],
+            "topics": [{"id": t.id, "title": t.title, "module_id": t.module_id} for t in topics],
+        },
+    )
+
+
+@router.get("/quiz-import/template")
+async def quiz_import_template():
+    """To'ldirish uchun namuna .xlsx shablonini qaytaradi (faqat savollar)."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Savollar"
+    ws.append(_QUIZ_XLSX_HEADERS)
+
+    header_fill = PatternFill(start_color="6C63F6", end_color="6C63F6", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF")
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    # Namuna qatorlar — har qator bitta savol.
+    examples = [
+        ["2 + 2 = ?", "3", "4", "5", "6", "B", "2 va 2 ning yig'indisi 4."],
+        ["10 - 7 = ?", "2", "3", "4", "5", "B", ""],
+        ["O'zbekiston poytaxti?", "Toshkent", "Samarqand", "Buxoro", "Xiva", "A", ""],
+        ["'Kitob' qaysi so'z turkumiga kiradi?", "Fe'l", "Ot", "Sifat", "Son", "B", ""],
+    ]
+    for r in examples:
+        ws.append(r)
+
+    widths = [44, 18, 18, 18, 18, 14, 34]
+    for col, w in enumerate(widths, start=1):
+        ws.column_dimensions[chr(64 + col)].width = w
+    ws.freeze_panes = "A2"
+
+    # Yo'riqnoma varag'i.
+    ws2 = wb.create_sheet("Yo'riqnoma")
+    guide = [
+        ["MUSLIMA DARMONOVA — Excel orqali test yuklash yo'riqnomasi"],
+        [""],
+        ["1. Modul, Mavzu va Test nomini SAHIFADAGI forma orqali kiritasiz —"],
+        ["   bu faylda faqat savollar bo'ladi."],
+        ["2. Har bir QATOR — bitta savol."],
+        ["3. 'Savol' — savol matni (majburiy)."],
+        ["4. A, B, C, D — to'rttala variant ham majburiy."],
+        ["5. 'To'g'ri javob' — A, B, C yoki D harfi (1-4 ham bo'ladi)."],
+        ["6. 'Izoh' — ixtiyoriy tushuntirish."],
+        [""],
+        ["Rasmli savollar: avval matnli savolni yuklang, keyin admin panelda"],
+        ["Savollar bo'limidan o'sha savolni tahrirlab rasm yuklaysiz."],
+        [""],
+        ["Ustun nomlarini (1-qator) O'ZGARTIRMANG."],
+    ]
+    for r in guide:
+        ws2.append(r)
+    ws2.column_dimensions["A"].width = 72
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="test_shablon.xlsx"'},
+    )
+
+
+@router.post("/quiz-import/upload")
+async def quiz_import_upload(
+    file: UploadFile = File(...),
+    module_id: str = Form(""),
+    new_module_title: str = Form(""),
+    topic_id: str = Form(""),
+    new_topic_title: str = Form(""),
+    quiz_title: str = Form(...),
+    time_limit_seconds: int = Form(300),
+    notify: bool = Form(False),
+    db: AsyncSession = Depends(get_db),
+):
+    """Excel'dagi savollarni sahifada tanlangan Modul/Mavzu/Test ostiga yuklaydi."""
+    name = (file.filename or "").lower()
+    if not name.endswith(".xlsx"):
+        raise HTTPException(400, "Faqat .xlsx fayl qabul qilinadi")
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "Fayl bo'sh")
+    if len(data) > MAX_QUIZ_XLSX_SIZE:
+        raise HTTPException(400, "Fayl juda katta (maks. 10 MB)")
+
+    quiz_title = (quiz_title or "").strip()
+    if not quiz_title:
+        raise HTTPException(400, "Test nomi kiritilmagan")
+
+    # ── Module (ixtiyoriy: mavjud id yoki yangi nom) ───────────────
+    new_module_title = (new_module_title or "").strip()
+    resolved_module_id: int | None = None
+    if new_module_title:
+        module = Module(title=new_module_title, is_active=True, order=0)
+        db.add(module)
+        await db.flush()
+        resolved_module_id = module.id
+    elif module_id.strip().isdigit():
+        resolved_module_id = int(module_id)
+        if not (await db.execute(select(Module.id).where(Module.id == resolved_module_id))).scalar_one_or_none():
+            raise HTTPException(400, "Modul topilmadi")
+
+    # ── Topic (mavjud id YOKI yangi nom — majburiy) ────────────────
+    new_topic_title = (new_topic_title or "").strip()
+    if new_topic_title:
+        topic = Topic(
+            title=new_topic_title, module_id=resolved_module_id,
+            is_active=True, order=0,
+        )
+        db.add(topic)
+        await db.flush()
+        resolved_topic_id = topic.id
+    elif topic_id.strip().isdigit():
+        resolved_topic_id = int(topic_id)
+        existing = (
+            await db.execute(select(Topic).where(Topic.id == resolved_topic_id))
+        ).scalar_one_or_none()
+        if not existing:
+            raise HTTPException(400, "Mavzu topilmadi")
+        if resolved_module_id and not existing.module_id:
+            existing.module_id = resolved_module_id
+    else:
+        raise HTTPException(400, "Mavzu tanlanmagan yoki kiritilmagan")
+
+    # ── Savollarni Excel'dan o'qiymiz ──────────────────────────────
+    questions, errors = _parse_quiz_questions(data)
+    if not questions:
+        raise HTTPException(
+            400,
+            "Hech qanday yaroqli savol topilmadi. "
+            + (" ".join(errors[:5]) if errors else ""),
+        )
+
+    # ── Quiz + savollar ────────────────────────────────────────────
+    quiz = Quiz(
+        topic_id=resolved_topic_id,
+        title=quiz_title,
+        time_limit_seconds=max(10, int(time_limit_seconds or 300)),
+        is_active=True,
+    )
+    db.add(quiz)
+    await db.flush()
+
+    for i, q in enumerate(questions, start=1):
+        db.add(Question(
+            quiz_id=quiz.id,
+            order=i,
+            text=q["text"],
+            option_a=q["option_a"], option_b=q["option_b"],
+            option_c=q["option_c"], option_d=q["option_d"],
+            correct_option=CorrectOption(q["correct"]),
+            explanation=q["explanation"],
+        ))
+
+    quiz_id = quiz.id
+    await db.commit()
+
+    if notify:
+        asyncio.create_task(notify_new_quiz(quiz_id, quiz_title, settings.WEBAPP_URL))
+
+    return {
+        "ok": True,
+        "created": {"quizzes": 1, "questions": len(questions)},
+        "quiz_id": quiz_id,
+        "errors": errors,
+        "notify_scheduled": bool(notify),
+    }
+
+
 # ═══ Books upload tool ═════════════════════════════════════════════
 
 @router.get("/books", response_class=HTMLResponse)

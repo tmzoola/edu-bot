@@ -65,6 +65,8 @@ def setup_admin(app: FastAPI) -> None:
         views=[
             Link(label="Test yaratish", icon="fa fa-wand-magic-sparkles",
                  url="/admin-tools/builder"),
+            Link(label="Excel orqali test", icon="fa fa-file-excel",
+                 url="/admin-tools/quiz-import"),
             Link(label="Kitob yuklash", icon="fa fa-file-arrow-up",
                  url="/admin-tools/books"),
             ModuleAdminView(Module, identity="modul"),

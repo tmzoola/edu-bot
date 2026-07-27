@@ -184,11 +184,23 @@ def install_uzbek() -> None:
         (dt_dir / "uz.json").write_text(
             json.dumps(DT_UZ, ensure_ascii=False), encoding="utf-8"
         )
-        # avoid a 404 on momentjs/<locale>.js — reuse the English calendar
+        # avoid a 404 on momentjs/uz.js — starlette-admin's list.html always
+        # requests `momentjs/<locale>.js`. This build ships only de/fr/ru/tr
+        # (no en.js), so we can't copy the English calendar. Write a small
+        # `uz` locale stub instead: `defineLocale('uz', {})` inherits moment's
+        # built-in English defaults, so dates render fine and the 404 is gone.
         moment_dir = i18n_dir / "momentjs"
-        moment_en = moment_dir / "en.js"
-        if moment_en.is_file() and not (moment_dir / "uz.js").is_file():
-            shutil.copyfile(moment_en, moment_dir / "uz.js")
+        moment_uz = moment_dir / "uz.js"
+        if moment_dir.is_dir() and not moment_uz.is_file():
+            moment_en = moment_dir / "en.js"
+            if moment_en.is_file():
+                shutil.copyfile(moment_en, moment_uz)
+            else:
+                moment_uz.write_text(
+                    "(function(){if(typeof moment!=='undefined'){"
+                    "moment.defineLocale('uz',{});}})();",
+                    encoding="utf-8",
+                )
     except OSError as e:  # noqa: BLE001
         logger.warning("Could not write uz i18n assets: %s", e)
 
