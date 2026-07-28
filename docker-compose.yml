@@ -146,16 +146,10 @@ services:
       DOZZLE_NO_ANALYTICS: "true"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    # Faqat 127.0.0.1 ga bog'landi: tashqaridan ochiq emas, faqat host'dagi
-    # Nginx /logs/ orqali kiriladi.
-    ports:
-      - "127.0.0.1:8080:8080"
     expose:
       - "8080"
     healthcheck:
-      # Dozzle image'i distroless — ichida wget yo'q. O'zining healthcheck
-      # buyrug'idan foydalanamiz.
-      test: ["CMD", "/dozzle", "healthcheck"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/logs/healthcheck"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -212,10 +206,6 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/loki.yaml:ro
-    # DIQQAT: host'ning 3000-porti PM2 (boshqa ilova) tomonidan band, shuning
-    # uchun 3001 ga bog'ladik. Nginx /grafana/ shu portga proxy qiladi.
-    ports:
-      - "127.0.0.1:3001:3000"
     expose:
       - "3000"
     depends_on:

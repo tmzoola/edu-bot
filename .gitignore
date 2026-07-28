@@ -200,3 +200,6 @@ exported_tests
 # .env.bak-* ichida BOT_TOKEN va parollar bor — repoga hech qachon tushmasin.
 *.bak-*
 .env.bak*
+
+# Shu serverga xos compose sozlamalari (portlar) — repoga tushmasin.
+docker-compose.override.yml
