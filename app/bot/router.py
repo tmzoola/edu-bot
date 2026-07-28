@@ -158,21 +158,25 @@ async def _show_main_menu(msg: Message, user: TelegramUser) -> None:
     await msg.answer(text, reply_markup=await _main_keyboard(user.telegram_id))
 
 
-def _resolve_event_photo(image_url: str | None):
-    """Event rasmini `answer_photo` uchun tayyorlaydi.
+def _resolve_photo(image_url: str | None):
+    """Saqlangan rasmni `answer_photo` uchun tayyorlaydi (URL yoki lokal fayl).
 
     - Bo'sh bo'lsa None.
     - http(s):// bilan boshlansa — URL string o'zi.
-    - Aks holda MEDIA_ROOT ichidagi yuklangan fayl — `FSInputFile`.
+    - `/media/...`, `media/...` yoki nisbiy yo'l — MEDIA_ROOT ichidagi lokal
+      fayl `FSInputFile` sifatida (Telegram nisbiy URL'ni qabul qilmaydi).
     """
     if not image_url:
         return None
     if image_url.startswith(("http://", "https://")):
         return image_url
-    path = MEDIA_ROOT / image_url
+    rel = image_url.lstrip("/")
+    if rel.startswith("media/"):
+        rel = rel[len("media/"):]
+    path = MEDIA_ROOT / rel
     if path.exists():
         return FSInputFile(str(path))
-    logger.warning("event rasmi topilmadi: %s", path)
+    logger.warning("rasm topilmadi: %s", path)
     return None
 
 
@@ -193,7 +197,7 @@ async def _maybe_show_event(msg: Message) -> bool:
         msg.from_user.id, event.share_text or event.announcement_text
     )
     caption = re.sub(r"\n{3,}", "\n\n", normalize_newlines(event.announcement_text))
-    photo = _resolve_event_photo(event.image_url)
+    photo = _resolve_photo(event.image_url)
     if photo is not None:
         try:
             await msg.answer_photo(photo, caption=caption, reply_markup=kb)
@@ -481,8 +485,13 @@ async def book_info_callback(cb: CallbackQuery):
         InlineKeyboardButton(text="◀️ Orqaga", callback_data="back_to_books"),
     ]])
 
-    if book.cover_image_url:
-        await cb.message.answer_photo(book.cover_image_url, caption=text, reply_markup=kb)
+    cover = _resolve_photo(book.cover_image_url)
+    if cover is not None:
+        try:
+            await cb.message.answer_photo(cover, caption=text, reply_markup=kb)
+        except Exception:
+            logger.exception("kitob rasmini yuborib bo'lmadi: book_id=%s", book_id)
+            await cb.message.answer(text, reply_markup=kb)
     else:
         await cb.message.answer(text, reply_markup=kb)
     await cb.answer()
