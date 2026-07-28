@@ -52,7 +52,11 @@ class BookDelivery(StatesGroup):
     address = State()
 
 
-PHONE_RE = re.compile(r"^\+?\d[\d\s\-()]{6,20}$")
+# O'zbekiston mobil raqamlari uchun: +998 XX XXX XX XX yoki XX XXX XX XX
+# Operator kodlari: 9X (90–99), 33, 55, 77, 88
+PHONE_RE = re.compile(
+    r"^(\+?998)?\s?(9[0-9]|33|55|77|88)\s?\d{3}\s?\d{2}\s?\d{2}$"
+)
 
 
 async def get_or_create_user(tg_user) -> TelegramUser:
