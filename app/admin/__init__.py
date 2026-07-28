@@ -77,7 +77,6 @@ def setup_admin(app: FastAPI) -> None:
             Link(label="Kitob yuklash", icon="fa fa-file-arrow-up",
                  url="/admin-tools/books"),
             ModuleAdminView(Module, identity="modul"),
-            TopicAdminView(Topic, identity="mavzu"),
             QuizAdminView(Quiz, identity="test"),
             QuestionAdminView(Question, identity="savol"),
             BookAdminView(Book, identity="kitob"),

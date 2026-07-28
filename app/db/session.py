@@ -16,6 +16,7 @@ engine = create_async_engine(
     pool_pre_ping=True,    # zombi ulanishlarni oldindan tekshirish
     pool_recycle=1800,     # 30 daqiqada qayta ochish (Postgres idle timeout)
     pool_timeout=10,       # navbatda kutish (aks holda default 30s)
+    connect_args={"server_settings": {"timezone": "Asia/Tashkent"}},
 )
 # expire_on_commit=False so ORM attributes stay usable after commit without
 # triggering sync lazy-loads on the async session.

@@ -235,9 +235,14 @@ function startCountdown(){
     const tick = () => {
         const el = document.getElementById('cd');
         if (!el) { clearInterval(cdHandle); return; }
+        // Tashkent yarim tunigacha qolgan vaqt (brauzer tz'idan qat'i nazar)
         const now = new Date();
-        const mid = new Date(now); mid.setHours(24,0,0,0);
-        let s = Math.max(0, Math.floor((mid - now)/1000));
+        const parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Asia/Tashkent', hour12: false,
+            hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }).formatToParts(now).reduce((a,p) => (a[p.type]=p.value, a), {});
+        const tashkentSecs = (+parts.hour)*3600 + (+parts.minute)*60 + (+parts.second);
+        let s = Math.max(0, 86400 - tashkentSecs);
         const h = String(Math.floor(s/3600)).padStart(2,'0');
         const m = String(Math.floor(s%3600/60)).padStart(2,'0');
         const sec = String(s%60).padStart(2,'0');

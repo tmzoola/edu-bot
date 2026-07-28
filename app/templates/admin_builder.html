@@ -216,35 +216,9 @@ html[data-theme="dark"] .save-summary b{color:#fff}
         </div>
     </div>
 
-    {# ── Topic ───────────────────────────────────────────────── #}
-    <div class="card">
-        <div class="card-head"><h3><span class="dot"></span>2. Mavzu</h3></div>
-        <div class="card-body">
-            <div class="topic-tabs" data-group="topic">
-                <button class="topic-tab active" data-mode="existing">Mavjud</button>
-                <button class="topic-tab" data-mode="new">Yangi yaratish</button>
-            </div>
-
-            <div id="topic-existing">
-                <label class="label">Mavzuni tanlang</label>
-                <select class="select" id="topic-select">
-                    <option value="">— tanlang —</option>
-                    {% for t in topics %}
-                    <option value="{{ t.id }}">{{ t.title }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div id="topic-new" style="display:none">
-                <label class="label">Mavzu nomi</label>
-                <input class="input" type="text" id="topic-title" placeholder="Masalan: Matematika asoslari">
-            </div>
-        </div>
-    </div>
-
     {# ── Quiz meta ───────────────────────────────────────────── #}
     <div class="card">
-        <div class="card-head"><h3><span class="dot"></span>3. Test</h3></div>
+        <div class="card-head"><h3><span class="dot"></span>2. Test</h3></div>
         <div class="card-body">
             <label class="label">Sarlavha *</label>
             <input class="input" type="text" id="quiz-title" placeholder="Masalan: 1-daraja test">
@@ -263,7 +237,7 @@ html[data-theme="dark"] .save-summary b{color:#fff}
 
     {# ── Questions ──────────────────────────────────────────── #}
     <div class="card">
-        <div class="card-head"><h3><span class="dot"></span>4. Savollar</h3></div>
+        <div class="card-head"><h3><span class="dot"></span>3. Savollar</h3></div>
         <div class="card-body-tight">
             <div class="q-toolbar">
                 <div class="q-count"><b id="q-count">0</b> ta savol</div>
@@ -531,19 +505,16 @@ async function parseBulk() {
 /* Save */
 async function save() {
     const moduleMode = document.querySelector('.topic-tabs[data-group="module"] .topic-tab.active').dataset.mode;
-    const topicMode  = document.querySelector('.topic-tabs[data-group="topic"] .topic-tab.active').dataset.mode;
 
     const module_id = moduleMode === 'existing' ? document.getElementById('module-select').value : '';
     const new_module_title = moduleMode === 'new' ? document.getElementById('module-title').value : '';
-
-    const topic_id = topicMode === 'existing' ? document.getElementById('topic-select').value : '';
-    const new_topic_title = topicMode === 'new' ? document.getElementById('topic-title').value : '';
 
     const quiz_title = document.getElementById('quiz-title').value.trim();
     const quiz_description = document.getElementById('quiz-desc').value.trim();
     const time_limit_seconds = parseInt(document.getElementById('quiz-time').value || '300', 10);
 
-    if (!topic_id && !new_topic_title) { toast('Mavzu tanlang yoki yangisini yarating', 'err'); return; }
+    if (moduleMode === 'existing' && !module_id) { toast('Modulni tanlang', 'err'); return; }
+    if (moduleMode === 'new' && !new_module_title) { toast('Yangi modul nomini kiriting', 'err'); return; }
     if (!quiz_title) { toast('Test sarlavhasini kiriting', 'err'); return; }
     if (!questions.length) { toast('Kamida bitta savol qo\'shing', 'err'); return; }
     const missingCorrect = questions.findIndex(q => !q.correct);
@@ -566,8 +537,6 @@ async function save() {
             body: JSON.stringify({
                 module_id: module_id || null,
                 new_module_title,
-                topic_id: topic_id || null,
-                new_topic_title,
                 quiz_title,
                 quiz_description,
                 time_limit_seconds,
