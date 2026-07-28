@@ -365,7 +365,7 @@ function render(){
                         <label class="q-opt ${q.correct===L?'is-correct':''}">
                             <input type="radio" name="c${i}" ${q.correct===L?'checked':''} data-i="${i}" data-k="correct" value="${L}">
                             <span class="q-opt-letter">${L}</span>
-                            <input type="text" placeholder="Variant ${L}" data-i="${i}" data-k="option_${L.toLowerCase()}" value="${escapeAttr(q['option_'+L.toLowerCase()])}">
+                            <input type="text" placeholder="${L} javob matnini kiriting" data-i="${i}" data-k="option_${L.toLowerCase()}" value="${escapeAttr(q['option_'+L.toLowerCase()])}">
                         </label>
                     `).join('')}
                 </div>

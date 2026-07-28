@@ -464,7 +464,7 @@ function render() {
                             <input type="radio" name="correct-${i}" ${q.correct===L?'checked':''}
                                    onchange="update(${i},'correct','${L}')">
                             <span class="q-opt-letter">${L}</span>
-                            <input type="text" placeholder="${L} variant" value="${esc(q['option_'+L.toLowerCase()])}"
+                            <input type="text" placeholder="${L} javob matnini kiriting" value="${esc(q['option_'+L.toLowerCase()])}"
                                    oninput="update(${i},'option_${L.toLowerCase()}',this.value)">
                         </label>
                     `).join('')}
