@@ -65,7 +65,10 @@ document.getElementById('save').addEventListener('click', async () => {
     const full_name = document.getElementById('full_name').value.trim();
     const phone = document.getElementById('phone').value.trim();
     if (full_name.length < 2) { showMsg('err', "Ism Familyani kiriting"); return; }
-    if (!/^\+?\d[\d\s\-()]{6,20}$/.test(phone)) { showMsg('err', "Telefon raqam noto'g'ri"); return; }
+    if (!/^(\+?998)?\s?(9[0-9]|33|55|77|88)\s?\d{3}\s?\d{2}\s?\d{2}$/.test(phone)) {
+        showMsg('err', "Telefon raqam noto'g'ri. Format: +998 XX XXX XX XX (90–99, 33, 55, 77, 88)");
+        return;
+    }
 
     const btn = document.getElementById('save');
     btn.disabled = true; btn.textContent = 'Yuborilmoqda…';
