@@ -3,6 +3,7 @@ import hmac
 import json
 import logging
 import random
+import re
 from datetime import date, datetime, timedelta
 from typing import Any
 from urllib.parse import parse_qsl
@@ -307,6 +308,11 @@ async def _resolve_user(
 # Redis'da 60 soniya keshlanadi. Multi-worker (uvicorn --workers N) va bot
 # konteyner o'rtasida umumiy — har workerda alohida kesh saqlanmaydi.
 _SUB_TTL_SECONDS = 60
+
+# O'zbekiston mobil raqam: +998 XX XXX XX XX (operator kodlari: 9X, 33, 55, 77, 88)
+_UZ_PHONE_RE = re.compile(
+    r"^(\+?998)?\s?(9[0-9]|33|55|77|88)\s?\d{3}\s?\d{2}\s?\d{2}$"
+)
 
 try:
     import redis.asyncio as _aioredis  # type: ignore
@@ -957,9 +963,12 @@ async def update_me(
         user.last_name = parts[1] if len(parts) > 1 else None
 
     if phone is not None and phone != "":
-        cleaned = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-        if len(cleaned) < 7 or len(cleaned) > 20:
-            raise HTTPException(400, "Telefon raqam noto'g'ri")
+        if not _UZ_PHONE_RE.match(phone):
+            raise HTTPException(
+                400,
+                "Telefon raqam noto'g'ri. Format: +998 XX XXX XX XX "
+                "(operator kodi: 90–99, 33, 55, 77, 88)",
+            )
         user.phone = phone
 
     await db.commit()
