@@ -95,23 +95,45 @@ async def _update_user(telegram_id: int, **fields) -> TelegramUser | None:
         return user
 
 
-def _main_keyboard(tg_id: int) -> ReplyKeyboardMarkup:
+async def _get_menu_settings():
+    from models.menu import MenuSettings
+    async with session_factory() as session:
+        r = await session.execute(select(MenuSettings).limit(1))
+        return r.scalar_one_or_none()
+
+
+async def _main_keyboard(tg_id: int):
+    """Asosiy menyu (reply keyboard). Qaysi tugma ko'rinishi admin paneldagi
+    `MenuSettings` bilan boshqariladi (yo'q bo'lsa hammasi ko'rsatiladi)."""
     from api.v1.webapp import make_bot_token
     token = make_bot_token(tg_id)
+    s = await _get_menu_settings()
+    show_test = s.show_test if s else True
+    show_books = s.show_books if s else True
+    show_info = s.show_info if s else True
+    show_referral = s.show_referral if s else True
+
+    rows: list[list[KeyboardButton]] = []
+    if show_test:
+        rows.append([KeyboardButton(
+            text="🎓 Test ishlash",
+            web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/webapp/?t={token}"),
+        )])
+    second: list[KeyboardButton] = []
+    if show_books:
+        second.append(KeyboardButton(text="📚 Kitoblar do'koni"))
+    if show_info:
+        second.append(KeyboardButton(text="ℹ️ Ma'lumot"))
+    if second:
+        rows.append(second)
+    if show_referral:
+        rows.append([KeyboardButton(text="🔗 Taklif linki")])
+
+    if not rows:
+        # Barcha tugma o'chirilgan — klaviaturani olib tashlaymiz.
+        return ReplyKeyboardRemove()
     return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(
-                text="🎓 Test ishlash",
-                web_app=WebAppInfo(url=f"{settings.WEBAPP_URL}/webapp/?t={token}"),
-            )],
-            [
-                KeyboardButton(text="📚 Kitoblar do'koni"),
-                KeyboardButton(text="ℹ️ Ma'lumot"),
-            ],
-            [KeyboardButton(text="🔗 Taklif linki")],
-        ],
-        resize_keyboard=True,
-        is_persistent=True,
+        keyboard=rows, resize_keyboard=True, is_persistent=True
     )
 
 
@@ -133,7 +155,7 @@ async def _show_main_menu(msg: Message, user: TelegramUser) -> None:
         "🏆 O'z ko'rsatkichlaringizni yaxshilang\n\n"
         "👇 Quyidagi tugmalar orqali boshlang!"
     )
-    await msg.answer(text, reply_markup=_main_keyboard(user.telegram_id))
+    await msg.answer(text, reply_markup=await _main_keyboard(user.telegram_id))
 
 
 def _resolve_event_photo(image_url: str | None):
@@ -184,7 +206,7 @@ async def _maybe_show_event(msg: Message) -> bool:
     # Asosiy menyu tugmalarini (reply keyboard) qayta o'rnatamiz.
     await msg.answer(
         "👇 Quyidagi tugmalar orqali boshlang!",
-        reply_markup=_main_keyboard(msg.from_user.id),
+        reply_markup=await _main_keyboard(msg.from_user.id),
     )
     return True
 
@@ -394,7 +416,7 @@ async def info_handler(msg: Message):
         "📞 Murojaat uchun: @m_darmonova\n"
         "📚 Kitob admini: @attestatsiya_kitob\n\n"
         "🚀 Test ishlash uchun pastdagi tugmani bosing!",
-        reply_markup=_main_keyboard(msg.from_user.id),
+        reply_markup=await _main_keyboard(msg.from_user.id),
     )
 
 

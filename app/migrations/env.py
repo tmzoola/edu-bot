@@ -19,6 +19,7 @@ from models.referral_event import (  # noqa: F401
     ReferralEvent,
     ReferralEventParticipant,
 )
+from models.menu import MenuSettings  # noqa: F401
 from models.rewards import RewardTier, UserReward  # noqa: F401
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
