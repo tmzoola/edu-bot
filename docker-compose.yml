@@ -24,6 +24,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-pos}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pos}
       POSTGRES_DB: ${POSTGRES_DB:-malaka}
+      TZ: Asia/Tashkent
+      PGTZ: Asia/Tashkent
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -64,6 +66,7 @@ services:
       POSTGRES_HOST: db
       REDIS_URL: redis://redis:6379/0
       UVICORN_WORKERS: "2"
+      TZ: Asia/Tashkent
     volumes:
       # Uploaded files (books etc.) must survive image rebuilds
       - media_data:/project/app/media
@@ -92,6 +95,7 @@ services:
     environment:
       POSTGRES_HOST: db
       REDIS_URL: redis://redis:6379/0
+      TZ: Asia/Tashkent
     working_dir: /project/app
     entrypoint: ["python", "-m", "bot_main"]
     volumes:
@@ -116,6 +120,7 @@ services:
       - .env
     environment:
       POSTGRES_HOST: db
+      TZ: Asia/Tashkent
     working_dir: /project/app
     # entrypoint.sh (uvicorn) o'rniga guard botni to'g'ridan-to'g'ri ishga tushiramiz
     entrypoint: ["python", "-m", "guard.main"]

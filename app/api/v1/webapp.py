@@ -25,7 +25,7 @@ from models.quiz import Quiz
 from models.shop import BookOrder, ShopBook, ShopSettings
 from models.telegram_user import TelegramUser
 from models.topic import Topic
-from sqlalchemy import desc, func, select
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -498,6 +498,7 @@ async def list_modules(db: AsyncSession = Depends(get_db)):
         )
         counts = dict(rows.all())
 
+        # Quizzes attached to module via topic (eski oqim)
         qrows = await db.execute(
             select(Topic.module_id, func.count(Quiz.id))
             .join(Quiz, Quiz.topic_id == Topic.id)
@@ -508,7 +509,22 @@ async def list_modules(db: AsyncSession = Depends(get_db)):
             )
             .group_by(Topic.module_id)
         )
-        quiz_counts = dict(qrows.all())
+        for module_id_, cnt in qrows.all():
+            quiz_counts[module_id_] = quiz_counts.get(module_id_, 0) + cnt
+
+        # Quizzes attached to module directly (yangi oqim, mavzusiz) —
+        # topic_id NULL bo'lganlarini alohida qo'shamiz (aks holda double-count).
+        drows = await db.execute(
+            select(Quiz.module_id, func.count(Quiz.id))
+            .where(
+                Quiz.module_id.in_(ids),
+                Quiz.topic_id.is_(None),
+                Quiz.is_active == True,  # noqa: E712
+            )
+            .group_by(Quiz.module_id)
+        )
+        for module_id_, cnt in drows.all():
+            quiz_counts[module_id_] = quiz_counts.get(module_id_, 0) + cnt
 
     return [
         {
@@ -568,17 +584,22 @@ async def module_quizzes(module_id: int, db: AsyncSession = Depends(get_db)):
     if not module:
         raise HTTPException(404, "Modul topilmadi")
 
+    # Quiz modul bilan ikki xil bog'lanishi mumkin:
+    #   (a) to'g'ridan-to'g'ri Quiz.module_id (yangi oqim, mavzusiz),
+    #   (b) Quiz.topic → Topic.module_id (eski oqim, mavzu bilan).
     quizzes = (
         await db.execute(
             select(Quiz)
-            .join(Topic, Topic.id == Quiz.topic_id)
+            .outerjoin(Topic, Topic.id == Quiz.topic_id)
             .where(
-                Topic.module_id == module_id,
-                Topic.is_active == True,  # noqa: E712
                 Quiz.is_active == True,  # noqa: E712
+                or_(
+                    Quiz.module_id == module_id,
+                    and_(Topic.module_id == module_id, Topic.is_active == True),  # noqa: E712
+                ),
             )
             .options(selectinload(Quiz.topic))
-            .order_by(Topic.order, Topic.id, Quiz.id)
+            .order_by(Quiz.id)
         )
     ).scalars().all()
 

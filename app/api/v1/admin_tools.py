@@ -153,13 +153,11 @@ async def leaderboard_export(period: str = "all", db: AsyncSession = Depends(get
 @router.get("/builder", response_class=HTMLResponse)
 async def builder_page(request: Request, db: AsyncSession = Depends(get_db)):
     modules = (await db.execute(select(Module).order_by(Module.order, Module.id))).scalars().all()
-    topics = (await db.execute(select(Topic).order_by(Topic.order, Topic.id))).scalars().all()
     return templates.TemplateResponse(
         "admin_builder.html",
         {
             "request": request,
             "modules": [{"id": m.id, "title": m.title} for m in modules],
-            "topics": [{"id": t.id, "title": t.title, "module_id": t.module_id} for t in topics],
         },
     )
 
@@ -182,12 +180,10 @@ async def builder_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
     else:
         module_id = None
 
-    # ── Topic (existing id OR new) ─────────────────────────────────
+    # ── Topic majburiy emas (mavzu bosqichi UI'dan olib tashlangan) ────
+    # Eski so'rovlar bilan mos ish uchun topic_id/new_topic_title'ni qabul qilamiz.
     topic_id = payload.get("topic_id")
     new_topic_title = (payload.get("new_topic_title") or "").strip()
-
-    if not topic_id and not new_topic_title:
-        raise HTTPException(400, "Mavzu tanlanmagan yoki kiritilmagan")
 
     if new_topic_title:
         topic = Topic(
@@ -199,7 +195,7 @@ async def builder_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
         db.add(topic)
         await db.flush()
         topic_id = topic.id
-    else:
+    elif topic_id:
         topic_id = int(topic_id)
         existing = (
             await db.execute(
@@ -208,9 +204,10 @@ async def builder_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
         ).scalar_one_or_none()
         if not existing:
             raise HTTPException(400, "Mavzu topilmadi")
-        # If admin chose a module and topic wasn't linked, link it
         if module_id and not existing.module_id:
             existing.module_id = module_id
+    else:
+        topic_id = None
 
     # ── Quiz ───────────────────────────────────────────────────────
     title = (payload.get("quiz_title") or "").strip()
@@ -221,6 +218,7 @@ async def builder_save(payload: dict[str, Any], db: AsyncSession = Depends(get_d
 
     quiz = Quiz(
         topic_id=topic_id,
+        module_id=module_id,
         title=title,
         description=(payload.get("quiz_description") or "").strip() or None,
         time_limit_seconds=time_limit,
