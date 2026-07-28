@@ -33,6 +33,8 @@ tr:hover td{background:#fafafa}
 .btn-ship:hover{background:#059669}
 .btn-detail{background:#f3f4f6;color:#374151}
 .btn-detail:hover{background:#e5e7eb}
+.btn-del{background:#fee2e2;color:#b91c1c;margin-left:6px}
+.btn-del:hover{background:#fecaca}
 .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center}
 .modal-bg.open{display:flex}
 .modal{background:#fff;border-radius:20px;padding:28px 24px;max-width:440px;width:calc(100% - 32px)}
@@ -170,9 +172,19 @@ function render(){
       <td>${STATUS_LABELS[o.status]||o.status}</td>
       <td style="font-size:.8rem;color:#374151">${o.delivery_address ? esc(o.delivery_address.substring(0,40))+'…' : '—'}</td>
       <td style="font-size:.78rem;color:#6b7280">${fmtDate(o.created_at)}</td>
-      <td><button class="act-btn btn-detail" onclick="openModal(${o.id})">Ko'rish</button></td>
+      <td>
+        <button class="act-btn btn-detail" onclick="openModal(${o.id})">Ko'rish</button>
+        <button class="act-btn btn-del" onclick="deleteOrder(${o.id})" title="O'chirish">🗑️</button>
+      </td>
     </tr>
   `).join('');
+}
+
+async function deleteOrder(id){
+  if(!confirm(`#${id} buyurtmani o'chirmoqchimisiz?`)) return;
+  const r = await fetch(`/admin-tools/orders/${id}/delete`, {method:'POST'});
+  if(!r.ok){alert('O\'chirib bo\'lmadi');return;}
+  await load();
 }
 
 function openModal(id){
