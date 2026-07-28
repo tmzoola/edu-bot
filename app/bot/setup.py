@@ -1,3 +1,5 @@
+import logging
+
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -15,9 +17,23 @@ from bot.middlewares import BlacklistMiddleware
 from bot.router import router as main_router
 from core.config import settings
 
+logger = logging.getLogger(__name__)
+
 bot = Bot(token=settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 
-dp = Dispatcher(storage=MemoryStorage())
+# FSM holati Redis'da saqlanadi — shunda bot va app (buyurtmani tasdiqlab
+# yetkazish FSM'ini boshlaydigan) jarayonlari BIR XIL holatni ko'radi.
+# MemoryStorage har jarayonда alohida bo'lgani uchun app→bot state uzatilmasdi.
+try:
+    from aiogram.fsm.storage.redis import RedisStorage
+
+    _storage = RedisStorage.from_url(settings.REDIS_URL)
+    logger.info("✅ FSM storage: Redis (%s)", settings.REDIS_URL)
+except Exception:  # noqa: BLE001 — redis yo'q bo'lsa xotira'ga qaytamiz
+    logger.exception("Redis FSM storage o'rnatilmadi — MemoryStorage'ga qaytildi")
+    _storage = MemoryStorage()
+
+dp = Dispatcher(storage=_storage)
 # Block admin-blacklisted users before any handler (incl. FSM states) runs.
 _blacklist = BlacklistMiddleware()
 dp.message.outer_middleware(_blacklist)
