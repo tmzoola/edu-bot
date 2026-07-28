@@ -16,6 +16,7 @@ from models.referral_event import (
     ReferralEvent,
     ReferralEventParticipant,
 )
+from models.menu import MenuSettings
 
 __all__ = [
     "Base",
@@ -40,4 +41,5 @@ __all__ = [
     "ReferralEvent",
     "ReferralEventParticipant",
     "EventReferral",
+    "MenuSettings",
 ]
