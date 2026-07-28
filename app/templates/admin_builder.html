@@ -546,8 +546,14 @@ async function save() {
     if (!topic_id && !new_topic_title) { toast('Mavzu tanlang yoki yangisini yarating', 'err'); return; }
     if (!quiz_title) { toast('Test sarlavhasini kiriting', 'err'); return; }
     if (!questions.length) { toast('Kamida bitta savol qo\'shing', 'err'); return; }
-    const missing = questions.findIndex(q => !q.correct);
-    if (missing !== -1) { toast(`${missing+1}-savolda to'g'ri javob tanlanmagan`, 'err'); return; }
+    const missingCorrect = questions.findIndex(q => !q.correct);
+    if (missingCorrect !== -1) { toast(`${missingCorrect+1}-savolda to'g'ri javob tanlanmagan`, 'err'); return; }
+    const missingOpt = questions.findIndex(q =>
+        !q.option_a?.trim() || !q.option_b?.trim() || !q.option_c?.trim() || !q.option_d?.trim()
+    );
+    if (missingOpt !== -1) { toast(`${missingOpt+1}-savolda barcha variantlar (A,B,C,D) to'ldirilishi kerak`, 'err'); return; }
+    const missingText = questions.findIndex(q => !q.text?.trim() && !q.image_url);
+    if (missingText !== -1) { toast(`${missingText+1}-savolda matn yoki rasm bo'lishi kerak`, 'err'); return; }
 
     const btn = document.getElementById('btn-save');
     btn.disabled = true;
