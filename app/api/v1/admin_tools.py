@@ -1448,6 +1448,16 @@ async def order_ship(order_id: int, payload: dict[str, Any], db: AsyncSession = 
     return {"ok": True}
 
 
+@router.post("/orders/{order_id}/delete")
+async def order_delete(order_id: int, db: AsyncSession = Depends(get_db)):
+    order = await db.get(BookOrder, order_id)
+    if not order:
+        raise HTTPException(404, "Buyurtma topilmadi")
+    await db.delete(order)
+    await db.commit()
+    return {"ok": True}
+
+
 # ═══ Referral: Top inviters (T-020) ═══════════════════════════════════
 
 @router.get("/referral-leaderboard", response_class=HTMLResponse)
