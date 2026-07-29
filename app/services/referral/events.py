@@ -406,15 +406,20 @@ def share_button(
 def announcement_keyboard(
     inviter_tg_id: int, announcement_text: str | None
 ) -> InlineKeyboardMarkup:
-    """E'lon uchun inline keyboard: "Qatnashaman" + "Do'stlarga ulashish".
+    """E'lon uchun inline keyboard: faqat "Qatnashaman".
 
-    Chat qo'shilish tugmalari bu yerda ko'rsatilmaydi — foydalanuvchi
-    "Qatnashaman" bosgach a'zolik tekshiriladi va yetishmayotgan chatlar
-    keyingi xabarda chiqadi.
+    "Do'stlarga ulashish" bu yerda KO'RSATILMAYDI — foydalanuvchi avval
+    "Qatnashaman" bosib a'zolikdan o'tishi kerak. Aks holda a'zo bo'lmagan
+    ishtirokchi havolani ulashsa, taklif chiptalari sanalmaydi. Ulashish tugmasi
+    a'zolik tasdiqlangach keyingi qadamdagi chipta xabarida chiqadi
+    (`_ticket_keyboard`). Chat qo'shilish tugmalari ham bu yerda ko'rsatilmaydi —
+    "Qatnashaman" bosgach yetishmayotgan chatlar keyingi xabarda chiqadi.
+
+    `inviter_tg_id`/`announcement_text` endi ishlatilmaydi, ammo chaqiruvchi
+    imzosini buzmaslik uchun saqlanadi.
     """
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🎁 Qatnashaman", callback_data=SUBSCRIBED_CB)],
-            [share_button(inviter_tg_id, announcement_text)],
         ]
     )
