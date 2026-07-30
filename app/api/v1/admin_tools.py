@@ -1502,21 +1502,28 @@ async def event_leaderboard_page(
     db: AsyncSession = Depends(get_db),
 ):
     """Admin panel: konkursda eng ko'p chipta yiggan ishtirokchilar reytingi."""
-    from services.referral.events import get_event_leaderboard, list_events
+    from services.referral.events import (
+        event_total_invited_count,
+        get_event_leaderboard,
+        list_events,
+    )
 
     events = await list_events(db)
     if event_id is None and events:
         event_id = events[0].id  # eng yangi konkurs
 
     rows = []
+    total_invited = 0
     if event_id is not None:
         rows = await get_event_leaderboard(db, event_id=event_id, search=q)
+        total_invited = await event_total_invited_count(db, event_id=event_id)
 
     return templates.TemplateResponse(
         "admin_event_leaderboard.html",
         {
             "request": request,
             "rows": rows,
+            "total_invited": total_invited,
             "events": [{"id": e.id, "title": e.title} for e in events],
             "selected_event_id": event_id,
             "search": q or "",
