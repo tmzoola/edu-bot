@@ -320,6 +320,24 @@ async def referral_ticket_count(
     )
 
 
+async def event_total_invited_count(
+    session: AsyncSession, *, event_id: int
+) -> int:
+    """Konkurs bo'yicha jami taklif qilingan (hisoblangan) foydalanuvchilar soni."""
+    return int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(EventReferral)
+                .where(
+                    EventReferral.event_id == event_id,
+                    EventReferral.counted.is_(True),
+                )
+            )
+        ).scalar_one()
+    )
+
+
 def chat_join_url(chat: TrackedChat) -> str | None:
     """Chatga qo'shilish uchun ommaviy havola (`invite_url` yoki `t.me/username`)."""
     if chat.invite_url:
