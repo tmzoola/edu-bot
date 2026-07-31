@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from bot.setup import ALLOWED_UPDATES, bot, dp
@@ -29,7 +29,7 @@ async def _reengagement_loop() -> None:
         now = datetime.now(_TZ)
         next_run = now.replace(hour=_REENGAGEMENT_HOUR, minute=0, second=0, microsecond=0)
         if now >= next_run:
-            next_run = next_run.replace(day=next_run.day + 1)
+            next_run = next_run + timedelta(days=1)
         wait = (next_run - now).total_seconds()
         logger.info("Reengagement: next run in %.0f s (%s)", wait, next_run.isoformat())
         await asyncio.sleep(wait)
