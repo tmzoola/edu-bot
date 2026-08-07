@@ -73,6 +73,11 @@ body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,san
 .q-img-del{position:absolute;top:6px;right:6px;width:26px;height:26px;border:none;border-radius:7px;background:rgba(16,24,40,.7);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .q-img-del:hover{background:#dc2626}
 .q-text{margin-bottom:12px}
+.q-fmt-btn{background:transparent;border:none;color:#9aa2b8;font-size:.75rem;cursor:pointer;padding:4px 0;display:inline-flex;align-items:center;gap:5px;font-family:inherit;transition:.15s}
+.q-fmt-btn:hover{color:#6c63f6}
+.q-preview-label{font-size:.7rem;color:#9aa2b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-top:8px;margin-bottom:4px;display:flex;align-items:center;gap:5px}
+.q-preview{white-space:pre-line;background:#f7f8fc;border:1px dashed rgba(0,0,0,.12);border-radius:9px;padding:10px 12px;font-size:.88rem;line-height:1.4;color:#1f2430}
+.q-preview .ph{color:#9aa2b8}
 .q-options{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
 .q-opt{display:flex;align-items:center;gap:8px;background:#f7f8fc;border:1px solid rgba(0,0,0,.08);border-radius:9px;padding:2px 12px 2px 6px;transition:.15s}
 .q-opt.is-correct{border-color:#22c98a;background:rgba(34,197,138,.08)}
@@ -156,6 +161,12 @@ html[data-theme="dark"] .modal-close{color:#7c8aa8}
 html[data-theme="dark"] .modal-close:hover{background:rgba(255,255,255,.05);color:#fff}
 html[data-theme="dark"] .modal-body .hint{color:#7c8aa8;background:#131828;border-color:rgba(255,255,255,.05)}
 html[data-theme="dark"] .modal-body .hint code{background:rgba(108,99,246,.2);color:#a78bfa}
+html[data-theme="dark"] #bulk-preview{background:#131828;border-color:rgba(255,255,255,.08);color:#cdd3e0}
+html[data-theme="dark"] .q-fmt-btn{color:#7c8aa8}
+html[data-theme="dark"] .q-fmt-btn:hover{color:#fff;background:rgba(255,255,255,.06)}
+html[data-theme="dark"] .q-preview-label{color:#7c8aa8}
+html[data-theme="dark"] .q-preview{background:#131828;border-color:rgba(255,255,255,.1);color:#cdd3e0}
+html[data-theme="dark"] .q-preview .ph{color:#4c5776}
 html[data-theme="dark"] .modal-foot{border-top-color:rgba(255,255,255,.05)}
 html[data-theme="dark"] .toast{background:#1e2439;border-color:rgba(255,255,255,.08);color:#fff;box-shadow:0 10px 40px rgba(0,0,0,.5)}
 html[data-theme="dark"] .toast.err{border-left-color:#f87171}
@@ -275,6 +286,12 @@ html[data-theme="dark"] .save-summary b{color:#fff}
             <div class="hint">
                 Format: har bir savol yangi qatordan, variantlar <code>A) …</code> <code>B) …</code> <code>C) …</code> <code>D) …</code>,
                 to'g'ri javob <code>Answer: A</code> (yoki <code>Javob: A</code>). Savollar orasida bo'sh qator yoki <code>---</code>.
+                Savol matni ichida bir necha qator bo'lishi mumkin — ular xuddi shu ko'rinishda saqlanadi.
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+                <button type="button" class="btn btn-ghost btn-sm" onclick="autoFormatBulk()" title="Savol matni ichidagi '1.', '2.', 'a)', 'b)' kabi bandlarni topib, har birini alohida qatorga o'tkazadi">
+                    <i class="fa fa-list-ol"></i> Bandlarni qatorlarga ajratish
+                </button>
             </div>
             <textarea class="textarea" id="bulk-text" style="min-height:280px;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:.82rem" placeholder="1. 2+2 nechchi?
 A) 3
@@ -291,6 +308,10 @@ B) O'zbekiston
 C) Qirg'iziston
 D) Tojikiston
 Javob: B"></textarea>
+            <div class="hint" style="margin-top:8px;margin-bottom:0">
+                <b>Oldindan ko'rish</b> — savol matni foydalanuvchiga shunday ko'rinadi:
+            </div>
+            <div id="bulk-preview" style="white-space:pre-line;border:1px solid rgba(0,0,0,.1);border-radius:9px;padding:12px 14px;font-size:.88rem;color:#1f2430;background:#f7f8fc;min-height:40px"></div>
         </div>
         <div class="modal-foot">
             <button class="btn btn-ghost" onclick="closeBulk()">Bekor qilish</button>
@@ -430,7 +451,12 @@ function render() {
                 </div>
                 <div class="q-text">
                     <textarea class="textarea auto-grow" placeholder="Savol matni (rasm bo'lsa ixtiyoriy)" style="min-height:52px;overflow:hidden;resize:none"
-                              oninput="update(${i},'text',this.value); autoGrow(this)">${esc(q.text)}</textarea>
+                              oninput="update(${i},'text',this.value); autoGrow(this); updateQPreview(${i}, this.value)">${esc(q.text)}</textarea>
+                    <button type="button" class="q-fmt-btn" onclick="autoFormatQuestion(${i})" title="'1.', '2.', 'a)', 'b)' kabi bandlarni topib, har birini alohida qatorga o'tkazadi">
+                        <i class="fa fa-list-ol"></i> Bandlarni qatorlarga ajratish
+                    </button>
+                    <div class="q-preview-label"><i class="fa fa-eye"></i> Foydalanuvchi shunday ko'radi</div>
+                    <div class="q-preview" id="q-preview-${i}">${q.text.trim() ? esc(q.text) : '<span class="ph">Savol matni shu yerda ko\'rinadi…</span>'}</div>
                 </div>
                 <div class="q-options">
                     ${['A','B','C','D'].map(L => `
@@ -455,6 +481,37 @@ function autoGrow(el) {
     el.style.height = el.scrollHeight + 'px';
 }
 
+/* Uzun savol matnida "1.", "2.", "a)", "b)" kabi bandlarni topib,
+   har birini alohida qatorga o'tkazadi — admin natijani ko'rib, xohlasa
+   qo'lda (Enter/Backspace bilan) qayta tuzatishi mumkin. */
+function autoSplitNumbered(text) {
+    return String(text || '')
+        .replace(/(\S)[ \t]+(\d{1,2}[\.\)][ \t])/g, '$1\n$2')
+        .replace(/(\S)[ \t]+([a-dA-D][\.\)][ \t])/g, '$1\n$2')
+        .trim();
+}
+
+function autoFormatQuestion(i) {
+    questions[i].text = autoSplitNumbered(questions[i].text);
+    render();
+}
+
+function updateQPreview(i, text) {
+    const el = document.getElementById('q-preview-' + i);
+    if (!el) return;
+    el.innerHTML = text.trim() ? esc(text) : '<span class="ph">Savol matni shu yerda ko\'rinadi…</span>';
+}
+
+function autoFormatBulk() {
+    const el = document.getElementById('bulk-text');
+    el.value = autoSplitNumbered(el.value);
+    updateBulkPreview();
+}
+
+function updateBulkPreview() {
+    document.getElementById('bulk-preview').innerHTML = esc(document.getElementById('bulk-text').value) || '<span style="color:#9aa2b8">…</span>';
+}
+
 function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
@@ -477,8 +534,9 @@ document.querySelectorAll('.topic-tabs').forEach(group => {
 });
 
 /* Bulk */
-document.getElementById('btn-bulk').onclick = () => document.getElementById('bulk-modal').classList.add('open');
+document.getElementById('btn-bulk').onclick = () => { document.getElementById('bulk-modal').classList.add('open'); updateBulkPreview(); };
 document.getElementById('btn-save').onclick = save;
+document.getElementById('bulk-text').addEventListener('input', updateBulkPreview);
 function closeBulk() { document.getElementById('bulk-modal').classList.remove('open'); }
 
 async function parseBulk() {
