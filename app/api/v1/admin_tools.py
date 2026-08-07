@@ -1314,7 +1314,7 @@ def _parse_bulk(raw: str) -> list[dict]:
                 continue
             text_lines.append(line)
 
-        text = " ".join(l.strip() for l in text_lines).strip()
+        text = "\n".join(l.strip() for l in text_lines).strip()
         # strip leading numbering like "1." / "1)"
         text = re.sub(r"^\s*\d+\s*[\.\)\-\:]\s*", "", text).strip()
         q["text"] = text

@@ -48,6 +48,10 @@ textarea{min-height:180px;resize:vertical;line-height:1.55}
 .msg-err{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:#b91c1c}
 .msg-info{background:rgba(108,140,255,.1);border:1px solid rgba(108,140,255,.25);color:#4f46e5}
 
+.bubble{background:#EFFDDE;border:1px solid rgba(0,0,0,.05);border-radius:14px 14px 14px 4px;padding:10px 14px;font-size:.92rem;line-height:1.45;color:#111;white-space:pre-wrap;word-break:break-word;max-width:100%}
+.bubble .ph{color:#9aa2b8;white-space:normal}
+.tg-btn{display:inline-block;background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.08);color:#2481cc;border-radius:8px;padding:8px 16px;font-size:.85rem;font-weight:600;text-align:center}
+
 html[data-theme="dark"] body{background:#0b0e18;color:#cdd3e0}
 html[data-theme="dark"] .top{background:#0b0e18;border-color:rgba(255,255,255,.05)}
 html[data-theme="dark"] .brand,html[data-theme="dark"] .page-title{color:#fff}
@@ -67,6 +71,9 @@ html[data-theme="dark"] .btn-ghost:hover{background:rgba(255,255,255,.05);color:
 html[data-theme="dark"] .msg-ok{color:#4ade80}
 html[data-theme="dark"] .msg-err{color:#f87171}
 html[data-theme="dark"] .msg-info{color:#8b9cff}
+html[data-theme="dark"] .bubble{background:#1f3829;border-color:rgba(255,255,255,.06);color:#e4ecdf}
+html[data-theme="dark"] .bubble .ph{color:#4c5776}
+html[data-theme="dark"] .tg-btn{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1);color:#6ab4f5}
 </style>
 </head>
 <body>
@@ -99,7 +106,20 @@ html[data-theme="dark"] .msg-info{color:#8b9cff}
         <div class="row">
             <label for="text">Xabar matni <span style="color:#ef4444">*</span></label>
             <textarea id="text" placeholder="Salom! Bugun yangi kunlik test tayyor. Yeching!" maxlength="4000"></textarea>
-            <div class="hint">HTML tag'lar qo'llab-quvvatlanadi: &lt;b&gt;, &lt;i&gt;, &lt;u&gt;, &lt;a href="…"&gt;. Maksimum 4000 belgi.</div>
+            <div class="hint">HTML tag'lar qo'llab-quvvatlanadi: &lt;b&gt;, &lt;i&gt;, &lt;u&gt;, &lt;a href="…"&gt;. Maksimum 4000 belgi. Qator ko'chirish uchun matn ichida Enter bosing — u xabarda ham xuddi shunday saqlanadi.</div>
+            <div style="margin-top:8px">
+                <button type="button" class="btn btn-ghost" id="btn-autofmt" style="padding:8px 14px;font-size:.82rem" title="Matn ichidagi '1.', '2.', 'a)', 'b)' kabi bandlarni topib, har birini alohida qatorga o'tkazadi">
+                    <i class="fa fa-list-ol"></i> Bandlarni qatorlarga ajratish
+                </button>
+            </div>
+        </div>
+
+        <div class="row">
+            <label>Oldindan ko'rish — Telegram'da shunday ko'rinadi</label>
+            <div id="preview-bubble" class="bubble"><span class="ph">Xabar matni shu yerda ko'rinadi…</span></div>
+            <div id="preview-btn-wrap" style="display:none;margin-top:8px">
+                <span id="preview-btn" class="tg-btn"></span>
+            </div>
         </div>
 
         <div class="row two">
@@ -131,10 +151,38 @@ function showMsg(kind, html){
     if (kind === 'ok') setTimeout(() => { el.className = 'msg'; }, 6000);
 }
 
+/* Uzun matnda "1.", "2.", "a)", "b)" kabi bandlarni topib, har birini
+   alohida qatorga o'tkazadi — admin natijani ko'rib, xohlasa qo'lda
+   (Enter/Backspace bilan) qayta tuzatishi mumkin. */
+function autoSplitNumbered(text) {
+    return String(text || '')
+        .replace(/(\S)[ \t]+(\d{1,2}[\.\)][ \t])/g, '$1\n$2')
+        .replace(/(\S)[ \t]+([a-dA-D][\.\)][ \t])/g, '$1\n$2')
+        .trim();
+}
+
+function updatePreview() {
+    const t = $('text').value;
+    $('preview-bubble').innerHTML = t.trim() ? t : '<span class="ph">Xabar matni shu yerda ko\'rinadi…</span>';
+    const bt = $('button_text').value.trim();
+    $('preview-btn-wrap').style.display = bt ? '' : 'none';
+    $('preview-btn').textContent = bt;
+}
+
+$('text').addEventListener('input', updatePreview);
+$('button_text').addEventListener('input', updatePreview);
+$('btn-autofmt').addEventListener('click', () => {
+    $('text').value = autoSplitNumbered($('text').value);
+    updatePreview();
+});
+
 $('clear').addEventListener('click', () => {
     $('text').value = ''; $('button_text').value = ''; $('button_url').value = '';
     $('msg').className = 'msg';
+    updatePreview();
 });
+
+updatePreview();
 
 $('send').addEventListener('click', async () => {
     const text = $('text').value.trim();
