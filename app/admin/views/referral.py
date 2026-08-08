@@ -30,7 +30,7 @@ REFERRAL_EVENTS_DIR_NAME = "referral_events"
 
 class TrackedChatAdminView(BaseAdminView):
     name = "Kuzatiladigan chat"
-    label = "Referral: kuzatiladigan chatlar"
+    label = "Referral: kuzatiladigan chats"
     icon = "fa fa-hashtag"
 
     fields = [

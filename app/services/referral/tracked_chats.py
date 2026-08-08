@@ -38,16 +38,19 @@ async def upsert_tracked_chat(
     tracked = result.scalar_one_or_none()
 
     if tracked is None:
+        # Birinchi marta qo'shilganda chat har doim nofaol holatda yoziladi —
+        # admin qo'lda faollashtirmaguncha referral hisoblash boshlanmaydi.
         tracked = TrackedChat(
             chat_id=chat_id,
             title=title[:255],
             type=chat_type,
             username=username,
-            is_active=is_active,
+            is_active=False,
         )
         session.add(tracked)
         logger.info(
-            "TrackedChat yaratildi: chat_id=%s title=%r type=%s active=%s",
+            "TrackedChat yaratildi (nofaol): chat_id=%s title=%r type=%s "
+            "(hisoblangan is_active=%s e'tiborsiz qoldirildi)",
             chat_id,
             title,
             chat_type,
