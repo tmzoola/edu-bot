@@ -1155,7 +1155,13 @@ async def _daily_selection(db: AsyncSession, day: date | None = None):
             select(Topic)
             .join(Quiz, Quiz.topic_id == Topic.id)
             .join(Question, Question.quiz_id == Quiz.id)
-            .where(Topic.is_active == True, Quiz.is_active == True)  # noqa: E712
+            .outerjoin(Module, Module.id == Topic.module_id)
+            .where(
+                Topic.is_active == True,  # noqa: E712
+                Quiz.is_active == True,  # noqa: E712
+                # Modul biriktirilgan bo'lsa faqat faol modul topiklari.
+                or_(Topic.module_id.is_(None), Module.is_active == True),  # noqa: E712
+            )
             .group_by(Topic.id)
             .order_by(Topic.order, Topic.id)
         )
@@ -1170,7 +1176,12 @@ async def _daily_selection(db: AsyncSession, day: date | None = None):
         await db.execute(
             select(Question)
             .join(Quiz, Quiz.id == Question.quiz_id)
-            .where(Quiz.topic_id == topic.id, Quiz.is_active == True)  # noqa: E712
+            .outerjoin(Module, Module.id == Quiz.module_id)
+            .where(
+                Quiz.topic_id == topic.id,
+                Quiz.is_active == True,  # noqa: E712
+                or_(Quiz.module_id.is_(None), Module.is_active == True),  # noqa: E712
+            )
             .order_by(Question.id)
         )
     ).scalars().all()
